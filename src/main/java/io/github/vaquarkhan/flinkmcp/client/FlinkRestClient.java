@@ -1,6 +1,7 @@
 package io.github.vaquarkhan.flinkmcp.client;
 
 import io.github.vaquarkhan.flinkmcp.observability.Metrics;
+import io.github.vaquarkhan.flinkmcp.observability.Trace;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,31 +12,73 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class FlinkRestClient {
 
     public static final class BackendException extends RuntimeException {
+        private final int status;
+
         public BackendException(String message) {
-            super(message);
+            this(message, -1, null);
         }
 
         public BackendException(String message, Throwable cause) {
+            this(message, -1, cause);
+        }
+
+        public BackendException(String message, int status) {
+            this(message, status, null);
+        }
+
+        public BackendException(String message, int status, Throwable cause) {
             super(message, cause);
+            this.status = status;
+        }
+
+        public int status() {
+            return status;
         }
     }
+
+    private static final Logger LOG = LoggerFactory.getLogger(FlinkRestClient.class);
 
     private final String baseUrl;
     private final Metrics metrics;
     private final HttpClient http;
+    private final String authHeader;
 
     public FlinkRestClient(String baseUrl, Metrics metrics) {
+        this(baseUrl, metrics, null);
+    }
+
+    public FlinkRestClient(String baseUrl, Metrics metrics, String authHeader) {
         String u = baseUrl == null ? "" : baseUrl;
         while (u.endsWith("/")) {
             u = u.substring(0, u.length() - 1);
         }
         this.baseUrl = u;
         this.metrics = metrics;
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        this.authHeader = (authHeader == null || authHeader.isBlank()) ? null : authHeader;
+        this.http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+    }
+
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    public boolean ping() {
+        try {
+            get("/overview");
+            return true;
+        } catch (Exception e) {
+            LOG.warn("flink ping failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     public String get(String path) {
@@ -48,6 +91,10 @@ public final class FlinkRestClient {
 
     public String patch(String path, String jsonBody) {
         return send("PATCH", path, jsonBody, Duration.ofSeconds(30));
+    }
+
+    public String delete(String path) {
+        return send("DELETE", path, null, Duration.ofSeconds(30));
     }
 
     public String uploadJar(Path jar) {
@@ -66,18 +113,21 @@ public final class FlinkRestClient {
             System.arraycopy(fileBytes, 0, body, preamble.length, fileBytes.length);
             System.arraycopy(epilogue, 0, body, preamble.length + fileBytes.length, epilogue.length);
 
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder b = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + "/jars/upload"))
                     .timeout(Duration.ofSeconds(60))
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                    .build();
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(body));
+            applyAuth(b);
             metrics.addBytesOut(body.length);
-            HttpResponse<String> resp = http.send(request, HttpResponse.BodyHandlers.ofString());
+            long t0 = System.nanoTime();
+            HttpResponse<String> resp = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
             String respBody = resp.body() == null ? "" : resp.body();
             metrics.addBytesIn(respBody.getBytes(StandardCharsets.UTF_8).length);
+            LOG.info("flink upload status={} ms={} bytes_out={} bytes_in={}",
+                    resp.statusCode(), (System.nanoTime() - t0) / 1_000_000L, body.length, respBody.length());
             if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                throw new BackendException("HTTP " + resp.statusCode() + ": " + truncate(respBody));
+                throw new BackendException("HTTP " + resp.statusCode() + ": " + truncate(respBody), resp.statusCode());
             }
             return respBody;
         } catch (BackendException e) {
@@ -96,24 +146,30 @@ public final class FlinkRestClient {
             HttpRequest.Builder b = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + p))
                     .timeout(timeout);
+            applyAuth(b);
             byte[] out = jsonBody == null ? new byte[0] : jsonBody.getBytes(StandardCharsets.UTF_8);
             metrics.addBytesOut(out.length);
-            if ("GET".equals(method)) {
-                b.GET();
-            } else if ("POST".equals(method)) {
-                b.header("Content-Type", "application/json");
-                b.POST(HttpRequest.BodyPublishers.ofByteArray(out));
-            } else if ("PATCH".equals(method)) {
-                b.header("Content-Type", "application/json");
-                b.method("PATCH", HttpRequest.BodyPublishers.ofByteArray(out));
-            } else {
-                throw new BackendException("unsupported method " + method);
+            switch (method) {
+                case "GET" -> b.GET();
+                case "DELETE" -> b.DELETE();
+                case "POST" -> {
+                    b.header("Content-Type", "application/json");
+                    b.POST(HttpRequest.BodyPublishers.ofByteArray(out));
+                }
+                case "PATCH" -> {
+                    b.header("Content-Type", "application/json");
+                    b.method("PATCH", HttpRequest.BodyPublishers.ofByteArray(out));
+                }
+                default -> throw new BackendException("unsupported method " + method);
             }
+            long t0 = System.nanoTime();
             HttpResponse<String> resp = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
             String respBody = resp.body() == null ? "" : resp.body();
             metrics.addBytesIn(respBody.getBytes(StandardCharsets.UTF_8).length);
+            LOG.debug("flink {} {} status={} ms={} trace={}",
+                    method, p, resp.statusCode(), (System.nanoTime() - t0) / 1_000_000L, Trace.get());
             if (resp.statusCode() < 200 || resp.statusCode() >= 300) {
-                throw new BackendException("HTTP " + resp.statusCode() + ": " + truncate(respBody));
+                throw new BackendException("HTTP " + resp.statusCode() + ": " + truncate(respBody), resp.statusCode());
             }
             return respBody;
         } catch (BackendException e) {
@@ -123,6 +179,18 @@ public final class FlinkRestClient {
                 Thread.currentThread().interrupt();
             }
             throw new BackendException(method + " failed: " + e.getMessage(), e);
+        }
+    }
+
+    private void applyAuth(HttpRequest.Builder b) {
+        if (authHeader != null) {
+            // Full header value, e.g. "Bearer xxx" or "Basic xxx"
+            int sp = authHeader.indexOf(' ');
+            if (sp > 0) {
+                b.header("Authorization", authHeader);
+            } else {
+                b.header("Authorization", "Bearer " + authHeader);
+            }
         }
     }
 

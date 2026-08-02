@@ -24,25 +24,44 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import org.eclipse.jetty.server.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class FlinkMcpServer {
 
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
     private static final Logger LOG = LoggerFactory.getLogger(FlinkMcpServer.class);
 
     private FlinkMcpServer() {}
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
+        Thread.setDefaultUncaughtExceptionHandler((t, e) ->
+                LoggerFactory.getLogger("uncaught").error("uncaught in {}", t.getName(), e));
+        try {
+            run(args);
+        } catch (IllegalArgumentException e) {
+            LOG.error("configuration error: {}", e.getMessage());
+            System.exit(2);
+        } catch (Throwable t) {
+            LOG.error("fatal startup error", t);
+            System.exit(1);
+        }
+    }
+
+    static void run(String[] args) throws Exception {
         Config config = Config.fromEnv();
+        applyLogLevel(config.logLevel());
+        LOG.info("starting flink-mcp-server version={} transport={} protocol={} writesUnlocked={}",
+                VERSION, config.transport(), config.protocolVersion(), config.writesUnlocked());
+
         Metrics metrics = new Metrics();
-        FlinkRestClient flink = new FlinkRestClient(config.flinkRestUrl(), metrics);
+        FlinkRestClient flink = new FlinkRestClient(config.flinkRestUrl(), metrics, config.flinkAuthHeader());
         AuditLog audit = new AuditLog();
         OutputControls output = new OutputControls(config.maxBytes(), config.dlpEnabled());
         NonceStore nonces = new NonceStore();
@@ -61,18 +80,28 @@ public final class FlinkMcpServer {
                 callerLabel);
         SqlReadonlyGuard sqlGuard = new SqlReadonlyGuard();
         McpJsonMapper json = new JacksonMcpJsonMapperSupplier().get();
-        SqlGatewayClient gateway = new SqlGatewayClient(config.gatewayUrl(), json, metrics);
+        SqlGatewayClient gateway = new SqlGatewayClient(config.gatewayUrl(), json, metrics, config.gatewayAuthHeader());
 
         List<McpServerFeatures.SyncToolSpecification> tools = new ArrayList<>();
+
+        // --- Read tools (cluster + jobs + jars + SQL) ---
+        read(tools, config, gov, json, "get_cluster_info", "Cluster overview (slots, TMs, jobs)",
+                "{\"type\":\"object\",\"properties\":{}}", r -> "/overview", flink);
+        read(tools, config, gov, json, "get_flink_config", "JobManager /config",
+                "{\"type\":\"object\",\"properties\":{}}", r -> "/config", flink);
+        read(tools, config, gov, json, "list_taskmanagers", "List TaskManagers and resources",
+                "{\"type\":\"object\",\"properties\":{}}", r -> "/taskmanagers", flink);
         read(tools, config, gov, json, "list_jobs", "List Flink jobs",
-                "{\"type\":\"object\",\"properties\":{}}",
-                r -> "/jobs/overview", flink);
+                "{\"type\":\"object\",\"properties\":{}}", r -> "/jobs/overview", flink);
         read(tools, config, gov, json, "get_job", "Get Flink job details",
                 "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"}},\"required\":[\"jobId\"]}",
                 r -> "/jobs/" + Inputs.requireId(arg(r, "jobId")), flink);
         read(tools, config, gov, json, "get_job_status", "Get Flink job status",
                 "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"}},\"required\":[\"jobId\"]}",
                 r -> "/jobs/" + Inputs.requireId(arg(r, "jobId")) + "/status", flink);
+        read(tools, config, gov, json, "get_job_config", "Get Flink job configuration",
+                "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"}},\"required\":[\"jobId\"]}",
+                r -> "/jobs/" + Inputs.requireId(arg(r, "jobId")) + "/config", flink);
         read(tools, config, gov, json, "get_job_exceptions", "Get Flink job exceptions",
                 "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"}},\"required\":[\"jobId\"]}",
                 r -> "/jobs/" + Inputs.requireId(arg(r, "jobId")) + "/exceptions", flink);
@@ -83,8 +112,7 @@ public final class FlinkMcpServer {
                 "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"}},\"required\":[\"jobId\"]}",
                 r -> "/jobs/" + Inputs.requireId(arg(r, "jobId")) + "/checkpoints", flink);
         read(tools, config, gov, json, "list_jars", "List uploaded jars",
-                "{\"type\":\"object\",\"properties\":{}}",
-                r -> "/jars", flink);
+                "{\"type\":\"object\",\"properties\":{}}", r -> "/jars", flink);
 
         if (config.toolsAllowed().contains("run_sql_readonly")) {
             McpSchema.Tool tool = McpSchema.Tool.builder()
@@ -95,19 +123,27 @@ public final class FlinkMcpServer {
             tools.add(McpServerFeatures.SyncToolSpecification.builder()
                     .tool(tool)
                     .callHandler((exchange, request) -> {
-                        String sql = arg(request, "sql");
-                        if (!sqlGuard.isReadOnly(sql)) {
-                            audit.append(callerLabel, "run_sql_readonly", "DENIED:SQL_NOT_READONLY:step9");
+                        try {
+                            String sql = Inputs.requireSql(arg(request, "sql"), config.maxSqlChars());
+                            if (!sqlGuard.isReadOnly(sql)) {
+                                audit.append(callerLabel, "run_sql_readonly", "DENIED:SQL_NOT_READONLY:step9");
+                                return McpSchema.CallToolResult.builder()
+                                        .isError(true)
+                                        .addTextContent("denied: SQL_NOT_READONLY")
+                                        .build();
+                            }
+                            return gov.run("run_sql_readonly", ToolClass.READ, request, () -> gateway.execute(sql));
+                        } catch (Inputs.InvalidInput e) {
                             return McpSchema.CallToolResult.builder()
                                     .isError(true)
-                                    .addTextContent("denied: SQL_NOT_READONLY")
+                                    .addTextContent("denied: INVALID_INPUT")
                                     .build();
                         }
-                        return gov.run("run_sql_readonly", ToolClass.READ, request, () -> gateway.execute(sql));
                     })
                     .build());
         }
 
+        // --- Write tools (gated) ---
         write(tools, config, gov, json, "trigger_savepoint", "Trigger a savepoint", ToolClass.MUTATE,
                 "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"},\"targetDirectory\":{\"type\":\"string\"},\"approvalToken\":{\"type\":\"string\"}},\"required\":[\"jobId\",\"approvalToken\"]}",
                 r -> {
@@ -124,9 +160,12 @@ public final class FlinkMcpServer {
                         "/jobs/" + Inputs.requireId(arg(r, "jobId"))
                                 + "/rescaling?parallelism=" + Inputs.requireInt(arg(r, "parallelism")),
                         "{}"));
-        write(tools, config, gov, json, "upload_jar", "Upload a jar", ToolClass.MUTATE,
+        write(tools, config, gov, json, "cancel_job", "Cancel a Flink job", ToolClass.DESTRUCTIVE,
+                "{\"type\":\"object\",\"properties\":{\"jobId\":{\"type\":\"string\"},\"approvalToken\":{\"type\":\"string\"}},\"required\":[\"jobId\",\"approvalToken\"]}",
+                r -> flink.patch("/jobs/" + Inputs.requireId(arg(r, "jobId")), "{\"mode\":\"cancel\"}"));
+        write(tools, config, gov, json, "upload_jar", "Upload a jar (path must be under allow-listed dirs)", ToolClass.MUTATE,
                 "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"approvalToken\":{\"type\":\"string\"}},\"required\":[\"path\",\"approvalToken\"]}",
-                r -> flink.uploadJar(Path.of(arg(r, "path"))));
+                r -> flink.uploadJar(Inputs.requireJarPath(arg(r, "path"), config.jarUploadAllowDirs())));
         write(tools, config, gov, json, "run_jar", "Run an uploaded jar", ToolClass.DESTRUCTIVE,
                 "{\"type\":\"object\",\"properties\":{\"jarId\":{\"type\":\"string\"},\"entryClass\":{\"type\":\"string\"},\"programArgs\":{\"type\":\"string\"},\"parallelism\":{\"type\":\"string\"},\"approvalToken\":{\"type\":\"string\"}},\"required\":[\"jarId\",\"approvalToken\"]}",
                 r -> {
@@ -176,8 +215,8 @@ public final class FlinkMcpServer {
             tools.add(McpServerFeatures.SyncToolSpecification.builder()
                     .tool(tool)
                     .callHandler((exchange, request) ->
-                            gov.run("run_sql_ddl_dml", ToolClass.DESTRUCTIVE, request,
-                                    () -> gateway.execute(arg(request, "sql"))))
+                            gov.run("run_sql_ddl_dml", ToolClass.DESTRUCTIVE, request, () ->
+                                    gateway.execute(Inputs.requireSql(arg(request, "sql"), config.maxSqlChars()))))
                     .build());
         }
 
@@ -187,7 +226,13 @@ public final class FlinkMcpServer {
                 restResource("flink://jobs", "jobs", "application/json",
                         callerLabel, audit, output, () -> flink.get("/jobs/overview")),
                 restResource("flink://health", "health", "application/json",
-                        callerLabel, audit, output, () -> flink.get("/config")),
+                        callerLabel, audit, output, () -> {
+                            boolean flinkOk = flink.ping();
+                            boolean gwOk = gateway.ping();
+                            return "{\"mcp\":\"" + VERSION + "\",\"flink_rest\":" + flinkOk
+                                    + ",\"sql_gateway\":" + gwOk + ",\"writes_unlocked\":"
+                                    + config.writesUnlocked() + "}";
+                        }),
                 new McpServerFeatures.SyncResourceSpecification(
                         McpSchema.Resource.builder()
                                 .uri("flink://audit/recent")
@@ -222,6 +267,16 @@ public final class FlinkMcpServer {
                 .resources(false, false)
                 .build();
 
+        AtomicReference<Server> httpServer = new AtomicReference<>();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            LOG.info("shutdown hook: draining backend pool and http");
+            gov.shutdown(config.shutdownTimeoutMillis());
+            HttpTransportServer.stopQuietly(httpServer.get(), config.shutdownTimeoutMillis());
+        }, "flink-mcp-shutdown"));
+
+        LOG.info("registered tools={} resources={} default_read_profile={}",
+                tools.size(), resources.size(), !config.writesUnlocked());
+
         if ("http".equals(config.transport())) {
             if (!config.httpAuthConfigured()) {
                 LOG.error("HTTP transport requires MCP_FLINK_HTTP_BEARER_TOKEN; refusing to start");
@@ -238,11 +293,16 @@ public final class FlinkMcpServer {
                     .tools(tools)
                     .resources(resources)
                     .build();
-            HttpTransportServer.startAndBlock(
+            Server server = HttpTransportServer.start(
+                    config.httpHost(),
                     config.httpPort(),
                     "/mcp/*",
                     httpTransport,
-                    new BearerAuthFilter(config.httpBearerToken()));
+                    new BearerAuthFilter(config.httpBearerToken()),
+                    metrics,
+                    () -> flink.ping());
+            httpServer.set(server);
+            server.join();
         } else {
             StdioServerTransportProvider stdio = new StdioServerTransportProvider(json);
             McpServer.sync(stdio)
@@ -251,7 +311,28 @@ public final class FlinkMcpServer {
                     .tools(tools)
                     .resources(resources)
                     .build();
+            LOG.info("stdio transport ready (stdout=MCP JSON-RPC, stderr=logs)");
             Thread.currentThread().join();
+        }
+    }
+
+    private static void applyLogLevel(String level) {
+        try {
+            Object factory = LoggerFactory.getILoggerFactory();
+            if (!factory.getClass().getName().contains("LoggerContext")) {
+                return;
+            }
+            Class<?> levelClass = Class.forName("ch.qos.logback.classic.Level");
+            Object lv = levelClass.getMethod("toLevel", String.class, levelClass)
+                    .invoke(null, level, levelClass.getField("INFO").get(null));
+            Object root = factory.getClass().getMethod("getLogger", String.class)
+                    .invoke(factory, Logger.ROOT_LOGGER_NAME);
+            root.getClass().getMethod("setLevel", levelClass).invoke(root, lv);
+            Object app = factory.getClass().getMethod("getLogger", String.class)
+                    .invoke(factory, "io.github.vaquarkhan.flinkmcp");
+            app.getClass().getMethod("setLevel", levelClass).invoke(app, lv);
+        } catch (Exception e) {
+            // binder may not be logback in tests
         }
     }
 
@@ -324,7 +405,9 @@ public final class FlinkMcpServer {
                                 List.of(new McpSchema.TextResourceContents(uri, mime, safe)));
                     } catch (Exception e) {
                         audit.append(callerLabel, uri, "ERROR");
-                        String msg = output.boundAndRedact(e.getMessage() == null ? e.getClass().getName() : e.getMessage());
+                        LOG.warn("resource {} error: {}", uri, e.getMessage());
+                        String msg = output.boundAndRedact(
+                                e.getMessage() == null ? e.getClass().getName() : e.getMessage());
                         return new McpSchema.ReadResourceResult(
                                 List.of(new McpSchema.TextResourceContents(uri, mime, msg)));
                     }

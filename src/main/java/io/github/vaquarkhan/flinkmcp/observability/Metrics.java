@@ -92,18 +92,29 @@ public final class Metrics {
     public String toPrometheus() {
         MemoryMXBean mem = ManagementFactory.getMemoryMXBean();
         StringBuilder sb = new StringBuilder();
+        sb.append("# HELP flink_mcp_calls_total Total governed tool calls\n");
+        sb.append("# TYPE flink_mcp_calls_total counter\n");
         sb.append("flink_mcp_calls_total ").append(totalCalls.get()).append('\n');
+        sb.append("# HELP flink_mcp_bytes_in_total Bytes received from backends\n");
+        sb.append("# TYPE flink_mcp_bytes_in_total counter\n");
         sb.append("flink_mcp_bytes_in_total ").append(bytesIn.get()).append('\n');
+        sb.append("# HELP flink_mcp_bytes_out_total Bytes sent to backends\n");
+        sb.append("# TYPE flink_mcp_bytes_out_total counter\n");
         sb.append("flink_mcp_bytes_out_total ").append(bytesOut.get()).append('\n');
+        sb.append("# HELP flink_mcp_heap_used_bytes JVM heap used\n");
+        sb.append("# TYPE flink_mcp_heap_used_bytes gauge\n");
         sb.append("flink_mcp_heap_used_bytes ").append(mem.getHeapMemoryUsage().getUsed()).append('\n');
+        sb.append("# TYPE flink_mcp_tool_allowed_total counter\n");
         for (Map.Entry<String, AtomicLong> e : allowedByTool.entrySet()) {
             sb.append("flink_mcp_tool_allowed_total{tool=\"").append(promEsc(e.getKey())).append("\"} ")
                     .append(e.getValue().get()).append('\n');
         }
+        sb.append("# TYPE flink_mcp_denied_total counter\n");
         for (Map.Entry<String, AtomicLong> e : deniedByCode.entrySet()) {
             sb.append("flink_mcp_denied_total{code=\"").append(promEsc(e.getKey())).append("\"} ")
                     .append(e.getValue().get()).append('\n');
         }
+        sb.append("# TYPE flink_mcp_tool_latency_ms summary\n");
         for (Map.Entry<String, LatencyRing> e : latencyByTool.entrySet()) {
             long p99 = e.getValue().percentiles()[2];
             sb.append("flink_mcp_tool_latency_ms{tool=\"").append(promEsc(e.getKey()))

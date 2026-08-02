@@ -1,5 +1,8 @@
 package io.github.vaquarkhan.flinkmcp.util;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class Inputs {
@@ -27,6 +30,52 @@ public final class Inputs {
             throw new InvalidInput("invalid int: " + value);
         }
         return value;
+    }
+
+    /**
+     * Resolves {@code path} and requires it to be a regular file under one of the allow-listed
+     * directories. Empty allow-list rejects all uploads (fail-closed when configured empty at call site
+     * after checking config — callers pass the configured set).
+     */
+    public static Path requireJarPath(String path, Set<String> allowDirs) {
+        if (path == null || path.isBlank()) {
+            throw new InvalidInput("jar path required");
+        }
+        if (allowDirs == null || allowDirs.isEmpty()) {
+            throw new InvalidInput("jar upload directories not configured (MCP_FLINK_JAR_UPLOAD_ALLOW_DIRS)");
+        }
+        try {
+            Path resolved = Path.of(path).toAbsolutePath().normalize();
+            if (!Files.isRegularFile(resolved)) {
+                throw new InvalidInput("jar path is not a regular file");
+            }
+            boolean ok = false;
+            for (String dir : allowDirs) {
+                Path root = Path.of(dir).toAbsolutePath().normalize();
+                if (resolved.startsWith(root)) {
+                    ok = true;
+                    break;
+                }
+            }
+            if (!ok) {
+                throw new InvalidInput("jar path outside allow-listed directories");
+            }
+            return resolved;
+        } catch (InvalidInput e) {
+            throw e;
+        } catch (Exception e) {
+            throw new InvalidInput("invalid jar path: " + e.getMessage());
+        }
+    }
+
+    public static String requireSql(String sql, int maxChars) {
+        if (sql == null || sql.isBlank()) {
+            throw new InvalidInput("sql required");
+        }
+        if (sql.length() > maxChars) {
+            throw new InvalidInput("sql exceeds max length " + maxChars);
+        }
+        return sql;
     }
 
     public static String jsonEscape(String s) {

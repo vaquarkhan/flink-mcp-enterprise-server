@@ -4,21 +4,21 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.github.vaquarkhan</groupId>
   <artifactId>flink-mcp-server</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <packaging>jar</packaging>
 
   <name>Flink MCP Server</name>
   <description>Production-grade governed MCP server for Apache Flink.</description>
-  <url>https://github.com/vaquarkhan/flink-mcp-server</url>
+  <url>https://github.com/vaquarkhan/flink-mcp-enterprise-server</url>
   <inceptionYear>2026</inceptionYear>
   <licenses>
     <license><name>The Apache License, Version 2.0</name><url>https://www.apache.org/licenses/LICENSE-2.0.txt</url><distribution>repo</distribution></license>
   </licenses>
   <developers><developer><id>vaquarkhan</id><name>Vaquar Khan</name><url>https://github.com/vaquarkhan</url></developer></developers>
   <scm>
-    <connection>scm:git:https://github.com/vaquarkhan/flink-mcp-server.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/vaquarkhan/flink-mcp-server.git</developerConnection>
-    <url>https://github.com/vaquarkhan/flink-mcp-server</url>
+    <connection>scm:git:https://github.com/vaquarkhan/flink-mcp-enterprise-server.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/vaquarkhan/flink-mcp-enterprise-server.git</developerConnection>
+    <url>https://github.com/vaquarkhan/flink-mcp-enterprise-server</url>
     <tag>HEAD</tag>
   </scm>
 

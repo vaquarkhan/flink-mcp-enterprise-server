@@ -12,6 +12,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class SqlGatewayClient {
 
@@ -25,12 +27,19 @@ public final class SqlGatewayClient {
         }
     }
 
+    private static final Logger LOG = LoggerFactory.getLogger(SqlGatewayClient.class);
+
     private final String baseUrl;
     private final McpJsonMapper json;
     private final Metrics metrics;
     private final HttpClient http;
+    private final String authHeader;
 
     public SqlGatewayClient(String baseUrl, McpJsonMapper json, Metrics metrics) {
+        this(baseUrl, json, metrics, null);
+    }
+
+    public SqlGatewayClient(String baseUrl, McpJsonMapper json, Metrics metrics, String authHeader) {
         String u = baseUrl == null ? "" : baseUrl;
         while (u.endsWith("/")) {
             u = u.substring(0, u.length() - 1);
@@ -38,7 +47,26 @@ public final class SqlGatewayClient {
         this.baseUrl = u;
         this.json = json;
         this.metrics = metrics;
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        this.authHeader = (authHeader == null || authHeader.isBlank()) ? null : authHeader;
+        this.http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+    }
+
+    public boolean ping() {
+        try {
+            // Flink SQL Gateway exposes /v1/info or /v3/info depending on version
+            try {
+                get("/v1/info");
+            } catch (GatewayException e) {
+                get("/v3/info");
+            }
+            return true;
+        } catch (Exception e) {
+            LOG.warn("gateway ping failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -56,6 +84,9 @@ public final class SqlGatewayClient {
             String resultUri = "/v1/sessions/" + sessionHandle + "/operations/" + operationHandle + "/result/0";
             List<String> pages = new ArrayList<>();
             for (int i = 0; i < 600; i++) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new GatewayException("interrupted while polling results");
+                }
                 String body = get(resultUri);
                 Map<String, Object> page = json.readValue(body, Map.class);
                 Object resultType = page.get("resultType");
@@ -74,6 +105,7 @@ public final class SqlGatewayClient {
                 }
                 resultUri = relativize(String.valueOf(next));
             }
+            LOG.info("gateway execute pages={} session={}", pages.size(), sessionHandle);
             return "[" + String.join(",", pages) + "]";
         } catch (GatewayException e) {
             throw e;
@@ -87,7 +119,7 @@ public final class SqlGatewayClient {
                 try {
                     delete("/v1/sessions/" + sessionHandle);
                 } catch (Exception ignored) {
-                    // best-effort cleanup
+                    LOG.debug("session cleanup failed for {}", sessionHandle);
                 }
             }
         }
@@ -123,6 +155,10 @@ public final class SqlGatewayClient {
             HttpRequest.Builder b = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + p))
                     .timeout(Duration.ofSeconds(30));
+            if (authHeader != null) {
+                int sp = authHeader.indexOf(' ');
+                b.header("Authorization", sp > 0 ? authHeader : "Bearer " + authHeader);
+            }
             byte[] out = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
             metrics.addBytesOut(out.length);
             switch (method) {

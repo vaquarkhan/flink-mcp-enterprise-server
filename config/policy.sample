@@ -1,0 +1,8 @@
+# Deny rules for Flink MCP Server (MCP_FLINK_POLICY_FILE)
+# Blank lines and # comments are ignored.
+# Glob: * -> .*, ? -> .
+
+# deny tool stop_job
+# deny tool cancel_job
+# deny job prod-*
+# deny job *-prod
