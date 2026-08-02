@@ -1,0 +1,8 @@
+# MCP_FLINK_AUTH_TOKENS_FILE — one caller per line (O2 phase A)
+# Format: callerId : sha256Hex(rawBearerToken) : jobsAllowCsv : jarsAllowCsv : readonly
+#
+# Generate hash:  echo -n 'my-token' | sha256sum
+# Or Java: TokenRegistry.sha256Hex("my-token")
+#
+# alice : REPLACE_WITH_SHA256_OF_ALICE_TOKEN : job-a,job-b : * : false
+# bob   : REPLACE_WITH_SHA256_OF_BOB_TOKEN   : job-c : jar-1 : true

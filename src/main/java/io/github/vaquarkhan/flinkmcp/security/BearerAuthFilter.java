@@ -10,16 +10,45 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Optional;
+import java.util.Set;
 
 /**
+ * Fail-closed bearer auth. Supports a single shared token or a hashed multi-caller registry.
+ *
  * @author Viquar Khan
  */
 public final class BearerAuthFilter implements Filter {
 
-    private final byte[] expected;
+    public static final String ATTR_CALLER = "flinkmcp.caller";
 
+    private final byte[] expectedBearerHeader;
+    private final CallerIdentity singleCaller;
+    private final TokenRegistry registry;
+
+    /** Single shared bearer token (legacy mode). */
     public BearerAuthFilter(String token) {
-        this.expected = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
+        this(token, "http", Set.of("*"), Set.of("*"), false);
+    }
+
+    public BearerAuthFilter(
+            String token, String callerId, Set<String> jobs, Set<String> jars, boolean readonly) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("bearer token required");
+        }
+        this.expectedBearerHeader = ("Bearer " + token).getBytes(StandardCharsets.UTF_8);
+        this.singleCaller = new CallerIdentity(callerId, jobs, jars, readonly);
+        this.registry = null;
+    }
+
+    /** Multi-caller registry (O2 phase A). */
+    public BearerAuthFilter(TokenRegistry registry) {
+        if (registry == null || registry.size() == 0) {
+            throw new IllegalArgumentException("token registry required");
+        }
+        this.expectedBearerHeader = null;
+        this.singleCaller = null;
+        this.registry = registry;
     }
 
     @Override
@@ -28,14 +57,39 @@ public final class BearerAuthFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse resp = (HttpServletResponse) response;
         String auth = req.getHeader("Authorization");
-        byte[] provided = auth == null ? new byte[0] : auth.getBytes(StandardCharsets.UTF_8);
-        if (!constantTimeEquals(expected, provided)) {
+        Optional<CallerIdentity> identity = resolve(auth);
+        if (identity.isEmpty()) {
             resp.setStatus(401);
             resp.setContentType("application/json");
             resp.getOutputStream().write("{\"error\":\"unauthorized\"}".getBytes(StandardCharsets.UTF_8));
             return;
         }
-        chain.doFilter(request, response);
+        CallerIdentity caller = identity.get();
+        req.setAttribute(ATTR_CALLER, caller);
+        CallerContext.set(caller);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            CallerContext.clear();
+        }
+    }
+
+    private Optional<CallerIdentity> resolve(String authHeader) {
+        if (authHeader == null || authHeader.isBlank()) {
+            return Optional.empty();
+        }
+        if (registry != null) {
+            if (!authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+                return Optional.empty();
+            }
+            String token = authHeader.substring(7).trim();
+            return registry.authenticateBearerToken(token);
+        }
+        byte[] provided = authHeader.getBytes(StandardCharsets.UTF_8);
+        if (!constantTimeEquals(expectedBearerHeader, provided)) {
+            return Optional.empty();
+        }
+        return Optional.of(singleCaller);
     }
 
     private static boolean constantTimeEquals(byte[] a, byte[] b) {

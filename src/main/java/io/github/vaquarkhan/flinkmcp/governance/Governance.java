@@ -5,6 +5,8 @@ import io.github.vaquarkhan.flinkmcp.observability.AuditLog;
 import io.github.vaquarkhan.flinkmcp.observability.Metrics;
 import io.github.vaquarkhan.flinkmcp.observability.Trace;
 import io.github.vaquarkhan.flinkmcp.security.ApprovalTokens;
+import io.github.vaquarkhan.flinkmcp.security.CallerContext;
+import io.github.vaquarkhan.flinkmcp.security.CallerIdentity;
 import io.github.vaquarkhan.flinkmcp.security.PolicyEngine;
 import io.github.vaquarkhan.flinkmcp.util.Inputs;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -36,7 +38,7 @@ public final class Governance {
     private final ApprovalTokens approvals;
     private final Metrics metrics;
     private final PolicyEngine policy;
-    private final String callerLabel;
+    private final CallerIdentity defaultCaller;
     private final ThreadPoolExecutor backendPool;
 
     public Governance(
@@ -57,7 +59,8 @@ public final class Governance {
         this.approvals = approvals;
         this.metrics = metrics;
         this.policy = policy;
-        this.callerLabel = callerLabel;
+        this.defaultCaller = new CallerIdentity(
+                callerLabel, config.allowedJobs(), config.allowedJars(), config.readonlyCaller());
         AtomicInteger n = new AtomicInteger();
         ThreadFactory tf = r -> {
             Thread t = new Thread(r, "flink-mcp-backend-" + n.incrementAndGet());
@@ -72,26 +75,27 @@ public final class Governance {
             String toolName, ToolClass cls, McpSchema.CallToolRequest request, Supplier<String> backendCall) {
         String trace = Trace.newId();
         long started = System.nanoTime();
+        CallerIdentity caller = CallerContext.current().orElse(defaultCaller);
         try {
             String jobId = arg(request, "jobId");
             String jarId = arg(request, "jarId");
-            LOG.info("call tool={} class={} job={} jar={}", toolName, cls,
+            LOG.info("call tool={} class={} caller={} job={} jar={}", toolName, cls, caller.callerId(),
                     jobId == null ? "-" : jobId, jarId == null ? "-" : jarId);
 
             if (!config.toolsAllowed().contains(toolName)) {
-                return deny(toolName, "NOT_EXPOSED", 1);
+                return deny(caller, toolName, "NOT_EXPOSED", 1);
             }
-            if (cls != ToolClass.READ && config.readonlyCaller()) {
-                return deny(toolName, "READONLY_CALLER", 2);
+            if (cls != ToolClass.READ && (config.readonlyCaller() || caller.readonly())) {
+                return deny(caller, toolName, "READONLY_CALLER", 2);
             }
-            if (jobId != null && !jobId.isBlank() && !config.jobInScope(jobId)) {
-                return deny(toolName, "SCOPE_DENIED", 2);
+            if (jobId != null && !jobId.isBlank() && !caller.jobAllowed(jobId)) {
+                return deny(caller, toolName, "SCOPE_DENIED", 2);
             }
-            if (jarId != null && !jarId.isBlank() && !config.jarInScope(jarId)) {
-                return deny(toolName, "SCOPE_DENIED", 2);
+            if (jarId != null && !jarId.isBlank() && !caller.jarAllowed(jarId)) {
+                return deny(caller, toolName, "SCOPE_DENIED", 2);
             }
             if (!policy.allows(toolName, jobId)) {
-                return deny(toolName, "POLICY_DENIED", 3);
+                return deny(caller, toolName, "POLICY_DENIED", 3);
             }
             if (cls != ToolClass.READ) {
                 String scope;
@@ -104,14 +108,14 @@ public final class Governance {
                 }
                 String token = arg(request, "approvalToken");
                 if (!approvals.verify(token, toolName, scope)) {
-                    return deny(toolName, "APPROVAL_REQUIRED", 4);
+                    return deny(caller, toolName, "APPROVAL_REQUIRED", 4);
                 }
             }
             if (!rateLimiter.allow()) {
-                return deny(toolName, "RATE_LIMITED", 5);
+                return deny(caller, toolName, "RATE_LIMITED", 5);
             }
             if (breaker.isOpen(toolName)) {
-                return deny(toolName, "BREAKER_OPEN", 6);
+                return deny(caller, toolName, "BREAKER_OPEN", 6);
             }
 
             Future<String> future = backendPool.submit(backendCall::get);
@@ -122,7 +126,7 @@ public final class Governance {
                 future.cancel(true);
                 breaker.recordFailure(toolName);
                 metrics.recordDenied(toolName, "TIMEOUT");
-                audit.append(callerLabel, toolName, "DENIED:TIMEOUT:step7");
+                audit.append(caller.callerId(), toolName, "DENIED:TIMEOUT:step7");
                 LOG.warn("timeout tool={} after={}ms", toolName, config.toolTimeoutMillis());
                 return McpSchema.CallToolResult.builder()
                         .isError(true)
@@ -132,7 +136,7 @@ public final class Governance {
                 Throwable cause = ee.getCause() == null ? ee : ee.getCause();
                 if (cause instanceof Inputs.InvalidInput) {
                     metrics.recordDenied(toolName, "INVALID_INPUT");
-                    audit.append(callerLabel, toolName, "DENIED:INVALID_INPUT:step7");
+                    audit.append(caller.callerId(), toolName, "DENIED:INVALID_INPUT:step7");
                     LOG.warn("invalid input tool={} msg={}", toolName, cause.getMessage());
                     return McpSchema.CallToolResult.builder()
                             .isError(true)
@@ -141,14 +145,14 @@ public final class Governance {
                 }
                 breaker.recordFailure(toolName);
                 metrics.recordDenied(toolName, "BACKEND_ERROR");
-                audit.append(callerLabel, toolName, "DENIED:BACKEND_ERROR:step7");
+                audit.append(caller.callerId(), toolName, "DENIED:BACKEND_ERROR:step7");
                 String msg = output.boundAndRedact("backend error: " + safeMsg(cause));
                 LOG.error("backend error tool={} msg={}", toolName, msg);
                 return McpSchema.CallToolResult.builder().isError(true).addTextContent(msg).build();
             } catch (Exception e) {
                 breaker.recordFailure(toolName);
                 metrics.recordDenied(toolName, "BACKEND_ERROR");
-                audit.append(callerLabel, toolName, "DENIED:BACKEND_ERROR:step7");
+                audit.append(caller.callerId(), toolName, "DENIED:BACKEND_ERROR:step7");
                 String msg = output.boundAndRedact("backend error: " + safeMsg(e));
                 LOG.error("backend error tool={} msg={}", toolName, msg);
                 return McpSchema.CallToolResult.builder().isError(true).addTextContent(msg).build();
@@ -158,8 +162,8 @@ public final class Governance {
             String safe = output.boundAndRedact(body);
             long ms = (System.nanoTime() - started) / 1_000_000L;
             metrics.recordAllowed(toolName, ms);
-            audit.append(callerLabel, toolName, "ALLOWED");
-            LOG.info("allowed tool={} ms={}", toolName, ms);
+            audit.append(caller.callerId(), toolName, "ALLOWED");
+            LOG.info("allowed tool={} caller={} ms={}", toolName, caller.callerId(), ms);
             return McpSchema.CallToolResult.builder().addTextContent(safe).build();
         } finally {
             Trace.clear();
@@ -178,10 +182,10 @@ public final class Governance {
         }
     }
 
-    private McpSchema.CallToolResult deny(String toolName, String code, int step) {
+    private McpSchema.CallToolResult deny(CallerIdentity caller, String toolName, String code, int step) {
         metrics.recordDenied(toolName, code);
-        audit.append(callerLabel, toolName, "DENIED:" + code + ":step" + step);
-        LOG.warn("denied tool={} code={} step={}", toolName, code, step);
+        audit.append(caller.callerId(), toolName, "DENIED:" + code + ":step" + step);
+        LOG.warn("denied tool={} caller={} code={} step={}", toolName, caller.callerId(), code, step);
         return McpSchema.CallToolResult.builder().isError(true).addTextContent("denied: " + code).build();
     }
 

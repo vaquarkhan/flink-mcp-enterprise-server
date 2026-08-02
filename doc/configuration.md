@@ -23,7 +23,12 @@ All settings are environment variables. `Config.fromEnv()` parses and `validate(
 | `MCP_FLINK_TRANSPORT` | `stdio` | `stdio` \| `http` |
 | `MCP_FLINK_HTTP_HOST` | `127.0.0.1` | Bind address |
 | `MCP_FLINK_HTTP_PORT` | `8090` | HTTP port |
-| `MCP_FLINK_HTTP_BEARER_TOKEN` | — | **Required** for HTTP |
+| `MCP_FLINK_HTTP_BEARER_TOKEN` | — | Shared bearer **or** use tokens file |
+| `MCP_FLINK_AUTH_TOKENS_FILE` | — | Multi-caller hashed tokens (O2); sample [`../config/auth-tokens.sample`](../config/auth-tokens.sample) |
+| `MCP_FLINK_HTTP_TLS_ENABLED` | `false` | HTTPS for MCP HTTP transport (O1) |
+| `MCP_FLINK_HTTP_TLS_KEYSTORE` | — | PKCS12/JKS path (required if TLS on) |
+| `MCP_FLINK_HTTP_TLS_KEYSTORE_PASSWORD` | — | Keystore password (required if TLS on) |
+| `MCP_FLINK_HTTP_TLS_KEYSTORE_TYPE` | `PKCS12` | Keystore type |
 | `MCP_FLINK_TOOL_TIMEOUT_MS` | `30000` | Backend timeout |
 | `MCP_FLINK_POLICY_FILE` | — | Deny rules path |
 | `MCP_FLINK_TOOLS_ALLOWED` | default reads | CSV; writes auto-merge when write enabled without custom list |
@@ -35,3 +40,9 @@ All settings are environment variables. `Config.fromEnv()` parses and `validate(
 | `MCP_FLINK_LOG_LEVEL` | `INFO` | Logback level |
 
 Policy sample: [`../config/policy.sample`](../config/policy.sample)
+
+### HTTP TLS (O1)
+Set `MCP_FLINK_HTTP_TLS_ENABLED=true` plus keystore path/password. Startup logs `https://…`. Self-signed PKCS12 is fine for local only; prefer a reverse proxy or CA cert in production.
+
+### Multi-caller tokens (O2 phase A)
+`MCP_FLINK_AUTH_TOKENS_FILE` lines: `callerId : sha256(token) : jobsCsv : jarsCsv : readonly`. Governance audit and job/jar scope use the resolved caller. Phase B (per-caller outbound Flink credentials) is not implemented yet.

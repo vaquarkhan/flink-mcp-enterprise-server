@@ -57,6 +57,11 @@ public final class Config {
     private final int httpPort;
     private final String httpHost;
     private final String httpBearerToken;
+    private final String authTokensFile;
+    private final boolean httpTlsEnabled;
+    private final String httpTlsKeystore;
+    private final String httpTlsKeystorePassword;
+    private final String httpTlsKeystoreType;
     private final long toolTimeoutMillis;
     private final String policyFile;
     private final Set<String> toolsAllowed;
@@ -86,6 +91,11 @@ public final class Config {
         this.httpPort = b.httpPort;
         this.httpHost = b.httpHost;
         this.httpBearerToken = b.httpBearerToken;
+        this.authTokensFile = b.authTokensFile;
+        this.httpTlsEnabled = b.httpTlsEnabled;
+        this.httpTlsKeystore = b.httpTlsKeystore;
+        this.httpTlsKeystorePassword = b.httpTlsKeystorePassword;
+        this.httpTlsKeystoreType = b.httpTlsKeystoreType;
         this.toolTimeoutMillis = b.toolTimeoutMillis;
         this.policyFile = b.policyFile;
         this.toolsAllowed = Collections.unmodifiableSet(new LinkedHashSet<>(b.toolsAllowed));
@@ -118,6 +128,11 @@ public final class Config {
             b.httpPort = parseInt("MCP_FLINK_HTTP_PORT", b.httpPort);
             b.httpHost = env("MCP_FLINK_HTTP_HOST", b.httpHost);
             b.httpBearerToken = System.getenv("MCP_FLINK_HTTP_BEARER_TOKEN");
+            b.authTokensFile = blankToNull(System.getenv("MCP_FLINK_AUTH_TOKENS_FILE"));
+            b.httpTlsEnabled = Boolean.parseBoolean(env("MCP_FLINK_HTTP_TLS_ENABLED", "false"));
+            b.httpTlsKeystore = blankToNull(System.getenv("MCP_FLINK_HTTP_TLS_KEYSTORE"));
+            b.httpTlsKeystorePassword = System.getenv("MCP_FLINK_HTTP_TLS_KEYSTORE_PASSWORD");
+            b.httpTlsKeystoreType = env("MCP_FLINK_HTTP_TLS_KEYSTORE_TYPE", b.httpTlsKeystoreType);
             b.toolTimeoutMillis = parseLong("MCP_FLINK_TOOL_TIMEOUT_MS", b.toolTimeoutMillis);
             b.policyFile = System.getenv("MCP_FLINK_POLICY_FILE");
             String tools = System.getenv("MCP_FLINK_TOOLS_ALLOWED");
@@ -178,7 +193,17 @@ public final class Config {
         }
         if ("http".equals(transport) && !httpAuthConfigured()) {
             throw new IllegalArgumentException(
-                    "MCP_FLINK_TRANSPORT=http requires MCP_FLINK_HTTP_BEARER_TOKEN (fail-closed)");
+                    "MCP_FLINK_TRANSPORT=http requires MCP_FLINK_HTTP_BEARER_TOKEN or MCP_FLINK_AUTH_TOKENS_FILE (fail-closed)");
+        }
+        if ("http".equals(transport) && httpTlsEnabled) {
+            if (httpTlsKeystore == null || httpTlsKeystore.isBlank()) {
+                throw new IllegalArgumentException(
+                        "MCP_FLINK_HTTP_TLS_ENABLED=true requires MCP_FLINK_HTTP_TLS_KEYSTORE (fail-closed)");
+            }
+            if (httpTlsKeystorePassword == null || httpTlsKeystorePassword.isBlank()) {
+                throw new IllegalArgumentException(
+                        "MCP_FLINK_HTTP_TLS_ENABLED=true requires MCP_FLINK_HTTP_TLS_KEYSTORE_PASSWORD (fail-closed)");
+            }
         }
     }
 
@@ -255,6 +280,11 @@ public final class Config {
     public int httpPort() { return httpPort; }
     public String httpHost() { return httpHost; }
     public String httpBearerToken() { return httpBearerToken; }
+    public String authTokensFile() { return authTokensFile; }
+    public boolean httpTlsEnabled() { return httpTlsEnabled; }
+    public String httpTlsKeystore() { return httpTlsKeystore; }
+    public String httpTlsKeystorePassword() { return httpTlsKeystorePassword; }
+    public String httpTlsKeystoreType() { return httpTlsKeystoreType; }
     public long toolTimeoutMillis() { return toolTimeoutMillis; }
     public String policyFile() { return policyFile; }
     public Set<String> toolsAllowed() { return toolsAllowed; }
@@ -268,7 +298,9 @@ public final class Config {
     public String logLevel() { return logLevel; }
 
     public boolean httpAuthConfigured() {
-        return httpBearerToken != null && !httpBearerToken.isBlank();
+        boolean bearer = httpBearerToken != null && !httpBearerToken.isBlank();
+        boolean tokensFile = authTokensFile != null && !authTokensFile.isBlank();
+        return bearer || tokensFile;
     }
 
     public boolean writesUnlocked() {
@@ -300,6 +332,11 @@ public final class Config {
         private int httpPort = 8090;
         private String httpHost = "127.0.0.1";
         private String httpBearerToken;
+        private String authTokensFile;
+        private boolean httpTlsEnabled = false;
+        private String httpTlsKeystore;
+        private String httpTlsKeystorePassword;
+        private String httpTlsKeystoreType = "PKCS12";
         private long toolTimeoutMillis = 30_000L;
         private String policyFile;
         private Set<String> toolsAllowed = new LinkedHashSet<>(DEFAULT_READ_TOOLS);
@@ -353,6 +390,46 @@ public final class Config {
 
         public Builder httpBearerToken(String httpBearerToken) {
             this.httpBearerToken = httpBearerToken;
+            return this;
+        }
+
+        public Builder authTokensFile(String authTokensFile) {
+            this.authTokensFile = authTokensFile;
+            return this;
+        }
+
+        public Builder httpTlsEnabled(boolean httpTlsEnabled) {
+            this.httpTlsEnabled = httpTlsEnabled;
+            return this;
+        }
+
+        public Builder httpTlsKeystore(String httpTlsKeystore) {
+            this.httpTlsKeystore = httpTlsKeystore;
+            return this;
+        }
+
+        public Builder httpTlsKeystorePassword(String httpTlsKeystorePassword) {
+            this.httpTlsKeystorePassword = httpTlsKeystorePassword;
+            return this;
+        }
+
+        public Builder httpHost(String httpHost) {
+            this.httpHost = httpHost;
+            return this;
+        }
+
+        public Builder breakerFailures(int breakerFailures) {
+            this.breakerFailures = breakerFailures;
+            return this;
+        }
+
+        public Builder allowedJobs(Set<String> allowedJobs) {
+            this.allowedJobs = new LinkedHashSet<>(allowedJobs);
+            return this;
+        }
+
+        public Builder allowedJars(Set<String> allowedJars) {
+            this.allowedJars = new LinkedHashSet<>(allowedJars);
             return this;
         }
 

@@ -14,16 +14,22 @@ import java.util.function.BooleanSupplier;
 import org.eclipse.jetty.ee10.servlet.FilterHolder;
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.http.HttpVersion;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.SslConnectionFactory;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Embedded Jetty for streamable HTTP MCP plus ops endpoints:
  * {@code /healthz}, {@code /readyz}, {@code /metrics} (Prometheus).
- */
-/**
+ * Optional TLS via {@link TlsSettings} (O1).
+ *
  * @author Viquar Khan
  */
 public final class HttpTransportServer {
@@ -40,12 +46,43 @@ public final class HttpTransportServer {
             Filter authFilter,
             Metrics metrics,
             BooleanSupplier readyCheck) throws Exception {
+        return start(host, port, pathSpec, mcpServlet, authFilter, metrics, readyCheck, TlsSettings.disabled());
+    }
+
+    public static Server start(
+            String host,
+            int port,
+            String pathSpec,
+            HttpServlet mcpServlet,
+            Filter authFilter,
+            Metrics metrics,
+            BooleanSupplier readyCheck,
+            TlsSettings tls) throws Exception {
         Server server = new Server();
-        ServerConnector connector = new ServerConnector(server);
-        connector.setHost(host);
-        connector.setPort(port);
-        connector.setIdleTimeout(60_000);
-        server.addConnector(connector);
+        if (tls != null && tls.enabled()) {
+            SslContextFactory.Server ssl = new SslContextFactory.Server();
+            ssl.setKeyStorePath(tls.keystorePath());
+            ssl.setKeyStorePassword(tls.keystorePassword());
+            ssl.setKeyStoreType(tls.keystoreType());
+
+            HttpConfiguration httpsConf = new HttpConfiguration();
+            httpsConf.addCustomizer(new SecureRequestCustomizer());
+
+            ServerConnector tlsConnector = new ServerConnector(
+                    server,
+                    new SslConnectionFactory(ssl, HttpVersion.HTTP_1_1.asString()),
+                    new HttpConnectionFactory(httpsConf));
+            tlsConnector.setHost(host);
+            tlsConnector.setPort(port);
+            tlsConnector.setIdleTimeout(60_000);
+            server.addConnector(tlsConnector);
+        } else {
+            ServerConnector connector = new ServerConnector(server);
+            connector.setHost(host);
+            connector.setPort(port);
+            connector.setIdleTimeout(60_000);
+            server.addConnector(connector);
+        }
 
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
@@ -63,8 +100,9 @@ public final class HttpTransportServer {
         server.setStopAtShutdown(true);
         server.setStopTimeout(10_000);
         server.start();
-        LOG.info("http transport listening on http://{}:{} (mcp={}, healthz=/healthz, metrics=/metrics)",
-                host, port, pathSpec);
+        String scheme = (tls != null && tls.enabled()) ? "https" : "http";
+        LOG.info("http transport listening on {}://{}:{} (mcp={}, healthz=/healthz, metrics=/metrics)",
+                scheme, host, port, pathSpec);
         return server;
     }
 

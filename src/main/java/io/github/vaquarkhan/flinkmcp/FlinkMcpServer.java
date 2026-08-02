@@ -15,7 +15,9 @@ import io.github.vaquarkhan.flinkmcp.security.ApprovalTokens;
 import io.github.vaquarkhan.flinkmcp.security.BearerAuthFilter;
 import io.github.vaquarkhan.flinkmcp.security.NonceStore;
 import io.github.vaquarkhan.flinkmcp.security.PolicyEngine;
+import io.github.vaquarkhan.flinkmcp.security.TokenRegistry;
 import io.github.vaquarkhan.flinkmcp.transport.HttpTransportServer;
+import io.github.vaquarkhan.flinkmcp.transport.TlsSettings;
 import io.github.vaquarkhan.flinkmcp.util.Inputs;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapperSupplier;
@@ -24,6 +26,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +41,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class FlinkMcpServer {
 
-    public static final String VERSION = "0.2.0";
+    public static final String VERSION = "0.3.0";
     private static final Logger LOG = LoggerFactory.getLogger(FlinkMcpServer.class);
 
     private FlinkMcpServer() {}
@@ -282,9 +285,35 @@ public final class FlinkMcpServer {
 
         if ("http".equals(config.transport())) {
             if (!config.httpAuthConfigured()) {
-                LOG.error("HTTP transport requires MCP_FLINK_HTTP_BEARER_TOKEN; refusing to start");
+                LOG.error("HTTP transport requires MCP_FLINK_HTTP_BEARER_TOKEN or MCP_FLINK_AUTH_TOKENS_FILE; refusing to start");
                 System.exit(2);
             }
+            if (!config.httpTlsEnabled()
+                    && config.httpHost() != null
+                    && !"127.0.0.1".equals(config.httpHost())
+                    && !"localhost".equalsIgnoreCase(config.httpHost())
+                    && !"::1".equals(config.httpHost())) {
+                LOG.warn("HTTP bind host {} is not loopback and TLS is disabled; prefer MCP_FLINK_HTTP_TLS_ENABLED=true",
+                        config.httpHost());
+            }
+            BearerAuthFilter authFilter;
+            if (config.authTokensFile() != null) {
+                TokenRegistry registry = TokenRegistry.load(Path.of(config.authTokensFile()));
+                LOG.info("loaded auth token registry entries={}", registry.size());
+                authFilter = new BearerAuthFilter(registry);
+            } else {
+                authFilter = new BearerAuthFilter(
+                        config.httpBearerToken(),
+                        "http",
+                        config.allowedJobs(),
+                        config.allowedJars(),
+                        config.readonlyCaller());
+            }
+            TlsSettings tls = new TlsSettings(
+                    config.httpTlsEnabled(),
+                    config.httpTlsKeystore(),
+                    config.httpTlsKeystorePassword(),
+                    config.httpTlsKeystoreType());
             HttpServletStreamableServerTransportProvider httpTransport =
                     HttpServletStreamableServerTransportProvider.builder()
                             .jsonMapper(json)
@@ -301,9 +330,10 @@ public final class FlinkMcpServer {
                     config.httpPort(),
                     "/mcp/*",
                     httpTransport,
-                    new BearerAuthFilter(config.httpBearerToken()),
+                    authFilter,
                     metrics,
-                    () -> flink.ping());
+                    () -> flink.ping(),
+                    tls);
             httpServer.set(server);
             server.join();
         } else {
