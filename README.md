@@ -144,6 +144,13 @@ Policy file sample: [`config/policy.sample`](config/policy.sample)
 
 ## Build / Maven Central
 
+| | Link |
+|---|---|
+| **Maven Central** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server |
+| **v0.2.0** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server/0.2.0 |
+| **repo1** | https://repo1.maven.org/maven2/io/github/vaquarkhan/flink-mcp-server/ |
+| **Publish guide** | [docs/PUBLISHING.md](docs/PUBLISHING.md) |
+
 ```bash
 mvn clean package                    # unit tests + jacoco + shaded jar
 mvn -Prelease package                # sources + javadoc (+ gpg if configured)
@@ -156,9 +163,7 @@ Publish (requires Sonatype Central credentials + GPG):
 mvn -Prelease deploy
 ```
 
-See [docs/PUBLISHING.md](docs/PUBLISHING.md).
-
-### Maven coordinates (after Central publish)
+### Maven coordinates
 
 ```xml
 <dependency>
@@ -167,8 +172,6 @@ See [docs/PUBLISHING.md](docs/PUBLISHING.md).
   <version>0.2.0</version>
 </dependency>
 ```
-
-Run from Central:
 
 ```bash
 mvn -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:get \
