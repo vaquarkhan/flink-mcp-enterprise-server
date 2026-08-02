@@ -7,7 +7,7 @@ COPY src ./src
 COPY LICENSE README.md ./
 RUN mvn -q -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /src/target/flink-mcp-server-*-all.jar /app/flink-mcp-server-all.jar
 ENV MCP_FLINK_TRANSPORT=http \
