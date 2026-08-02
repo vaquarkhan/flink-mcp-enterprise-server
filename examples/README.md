@@ -1,52 +1,97 @@
-# Examples
+# Examples — download and run
 
 Author: Viquar Khan
 
-Production-grade scenarios for **Flink MCP Enterprise Server**.
+Full working examples for **Flink MCP Enterprise Server**.  
+Clone the repo, start a real Flink cluster, build the jar, and run every scenario with one command.
 
-Each folder is self-contained: `README.md` (persona + story), `run.py`, and `data/` fixtures.
-Runners talk to a **real Flink REST API** (`FLINK_REST_URL`) and, when present, the shaded jar for MCP smoke.
+## One-command run
 
-## Prerequisites
-```bash
-# Flink must answer:
-curl -s http://localhost:8081/overview
+### Prerequisites
 
-# Optional Docker:
-docker network create flink-net
-docker run -d --name flink-jobmanager --network flink-net -p 8081:8081 \
-  -e JOB_MANAGER_RPC_ADDRESS=flink-jobmanager flink:1.20-java17 jobmanager
-docker run -d --name flink-taskmanager --network flink-net \
-  -e JOB_MANAGER_RPC_ADDRESS=flink-jobmanager flink:1.20-java17 taskmanager
+- Git, JDK 17+, Maven 3.9+, Python 3.9+, Docker
+
+### Windows (PowerShell)
+
+```powershell
+git clone https://github.com/vaquarkhan/flink-mcp-enterprise-server.git
+cd flink-mcp-enterprise-server
+.\examples\run_all.ps1
 ```
 
-## Run (from repository root)
+### macOS / Linux
+
+```bash
+git clone https://github.com/vaquarkhan/flink-mcp-enterprise-server.git
+cd flink-mcp-enterprise-server
+chmod +x examples/run_all.sh
+./examples/run_all.sh
+```
+
+### Or step-by-step
+
+```bash
+git clone https://github.com/vaquarkhan/flink-mcp-enterprise-server.git
+cd flink-mcp-enterprise-server
+
+mvn -DskipTests package
+docker compose -f examples/docker-compose.yml up -d
+python examples/run_all.py --skip-build
+```
+
+What `run_all` does:
+
+1. Starts Flink JobManager + TaskManager (`examples/docker-compose.yml`) if needed  
+2. Builds `target/flink-mcp-server-*-all.jar` if missing  
+3. Runs all persona examples against **real** Flink REST (`http://localhost:8081`)  
+4. Smokes MCP `initialize` + `tools/list` over stdio against the jar  
+
+Exit code **0** = everything passed.
+
+---
+
+## Example catalog
+
+| Folder | Persona | What it validates |
+|--------|---------|-------------------|
+| [`01_sre_job_triage/`](01_sre_job_triage/) | Night-shift SRE | Live `/overview`, `/taskmanagers`, `/jobs/overview` |
+| [`02_sql_readonly_guard/`](02_sql_readonly_guard/) | Analytics engineer | SELECT allowed; INSERT/DDL/stacked denied |
+| [`03_change_window_approvals/`](03_change_window_approvals/) | Platform on-call | Mint approval tokens via Java CLI |
+| [`04_dlp_secret_egress/`](04_dlp_secret_egress/) | Security engineer | DLP redaction + truncation |
+| [`_mcp_smoke.py`](_mcp_smoke.py) | Integrator | MCP stdio tools/list (read profile, no `stop_job`) |
+
+Each folder has:
+
+```text
+0N_name/
+  README.md     # persona + agent prompt
+  run.py        # executable — download and run
+  data/         # fixtures
+```
+
+Run one scenario:
+
 ```bash
 export FLINK_REST_URL=http://localhost:8081
 python examples/01_sre_job_triage/run.py
-python examples/02_sql_readonly_guard/run.py
-python examples/03_change_window_approvals/run.py
-python examples/04_dlp_secret_egress/run.py
-python examples/_mcp_smoke.py
 ```
 
-## Catalog
-| Folder | Persona | Story |
-|--------|---------|-------|
-| [`01_sre_job_triage/`](01_sre_job_triage/) | Night-shift SRE | Inspect cluster, TMs, jobs — read only |
-| [`02_sql_readonly_guard/`](02_sql_readonly_guard/) | Analytics engineer | SQL guard allows SELECT, blocks INSERT/DDL |
-| [`03_change_window_approvals/`](03_change_window_approvals/) | Platform on-call | Mint approval + deny replay for `stop_job` |
-| [`04_dlp_secret_egress/`](04_dlp_secret_egress/) | Security engineer | Output DLP redacts secrets / JWT / email |
+---
 
-## Layout
-```text
-examples/
-  _common.py
-  _mcp_smoke.py
-  0N_name/
-    README.md
-    run.py
-    data/
+## After examples: use the MCP server
+
+```bash
+FLINK_REST_URL=http://localhost:8081 \
+java -jar target/flink-mcp-server-0.2.0-all.jar
 ```
 
-Exit **0** = controls behaved; **non-zero** = Flink down or assertion failed.
+Cursor / Claude config: [../doc/getting-started.md](../doc/getting-started.md)  
+Tutorial: [../doc/tutorial.md](../doc/tutorial.md)
+
+---
+
+## Stop Flink
+
+```bash
+docker compose -f examples/docker-compose.yml down
+```

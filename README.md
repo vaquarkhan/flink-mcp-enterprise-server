@@ -34,6 +34,31 @@ Ops endpoints (HTTP mode): `GET /healthz`, `GET /readyz`, `GET /metrics` (Promet
 
 ---
 
+## Examples (download and run)
+
+Full working code lives in [`examples/`](examples/) — clone, start Flink, build the jar, run every scenario:
+
+```bash
+git clone https://github.com/vaquarkhan/flink-mcp-enterprise-server.git
+cd flink-mcp-enterprise-server
+
+# Windows
+.\examples\run_all.ps1
+
+# macOS / Linux
+chmod +x examples/run_all.sh && ./examples/run_all.sh
+
+# Or: python examples/run_all.py --start-flink
+```
+
+| | |
+|---|---|
+| **Guide** | [examples/README.md](examples/README.md) |
+| **Compose** | [examples/docker-compose.yml](examples/docker-compose.yml) (real Flink 1.20) |
+| **Tutorial** | [doc/tutorial.md](doc/tutorial.md) |
+
+---
+
 ## Default tool surface (read profile)
 
 | Tool | Backend |

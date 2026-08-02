@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Author: Viquar Khan
 """MCP stdio smoke: initialize + tools/list against the shaded jar (if built)."""
 from __future__ import annotations
@@ -6,6 +7,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -18,43 +21,81 @@ def main() -> int:
     expect(jar is not None, "shaded jar present (run mvn package)")
     assert jar is not None
 
-    payload = "\n".join(
-        [
-            json.dumps(
-                {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {},
-                        "clientInfo": {"name": "example-smoke", "version": "0.1"},
-                    },
-                }
-            ),
-            json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-            json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}),
-        ]
-    ) + "\n"
+    messages = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "example-smoke", "version": "0.1"},
+            },
+        },
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+    ]
+    payload = ("\n".join(json.dumps(m) for m in messages) + "\n").encode("utf-8")
 
     env = os.environ.copy()
     env.setdefault("FLINK_REST_URL", "http://localhost:8081")
     env["MCP_FLINK_LOG_LEVEL"] = "WARN"
 
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         ["java", "-jar", str(jar)],
-        input=payload.encode("utf-8"),
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=45,
         env=env,
-        check=False,
+        bufsize=0,
     )
-    out = proc.stdout.decode("utf-8", errors="replace")
-    lines = [ln for ln in out.splitlines() if ln.strip().startswith("{")]
-    expect(len(lines) >= 2, f"MCP JSON responses on stdout (got {len(lines)} lines)")
-    tools_msg = json.loads(lines[-1])
-    tools = tools_msg.get("result", {}).get("tools") or tools_msg.get("tools") or []
+    assert proc.stdin and proc.stdout and proc.stderr
+
+    out_chunks: list[bytes] = []
+    err_chunks: list[bytes] = []
+
+    def pump(stream, buf: list[bytes]) -> None:
+        while True:
+            b = stream.read(1)
+            if not b:
+                break
+            buf.append(b)
+
+    threading.Thread(target=pump, args=(proc.stdout, out_chunks), daemon=True).start()
+    threading.Thread(target=pump, args=(proc.stderr, err_chunks), daemon=True).start()
+
+    # Give the JVM a moment to boot before writing (stdio is ready after "stdio transport ready")
+    time.sleep(5)
+    proc.stdin.write(payload)
+    proc.stdin.flush()
+
+    deadline = time.time() + 40
+    text = ""
+    while time.time() < deadline:
+        text = b"".join(out_chunks).decode("utf-8", errors="replace")
+        json_lines = [ln for ln in text.splitlines() if ln.strip().startswith("{")]
+        if len(json_lines) >= 2:
+            break
+        time.sleep(0.2)
+    else:
+        proc.kill()
+        err = b"".join(err_chunks).decode("utf-8", errors="replace")
+        raise SystemExit(f"FAIL: MCP smoke timed out; out={text[:300]!r} err={err[-500:]!r}")
+
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        pass
+
+    json_lines = [ln for ln in text.splitlines() if ln.strip().startswith("{")]
+    expect(len(json_lines) >= 2, f"MCP JSON responses on stdout (got {len(json_lines)})")
+    tools_msg = json.loads(json_lines[-1])
+    tools = (tools_msg.get("result") or {}).get("tools") or []
     names = {t.get("name") for t in tools if isinstance(t, dict)}
     expect("list_jobs" in names, "list_jobs exposed")
     expect("get_cluster_info" in names, "get_cluster_info exposed")

@@ -1,0 +1,27 @@
+# Author: Viquar Khan
+# Full working Flink cluster for examples (JobManager + TaskManager)
+services:
+  jobmanager:
+    image: flink:1.20-java17
+    container_name: flink-mcp-jobmanager
+    command: jobmanager
+    ports:
+      - "8081:8081"
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/overview || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  taskmanager:
+    image: flink:1.20-java17
+    container_name: flink-mcp-taskmanager
+    depends_on:
+      jobmanager:
+        condition: service_started
+    command: taskmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=2
