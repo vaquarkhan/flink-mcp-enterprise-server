@@ -7,6 +7,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 
+/**
+ * @author Viquar Khan
+ */
 public final class AuditLog {
 
     public record Entry(String record, String hash, String prevHash) {}

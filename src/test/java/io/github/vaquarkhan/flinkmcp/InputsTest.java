@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.vaquarkhan.flinkmcp.util.Inputs;
 import org.junit.jupiter.api.Test;
 
+/**
+ * @author Viquar Khan
+ */
 class InputsTest {
 
     @Test

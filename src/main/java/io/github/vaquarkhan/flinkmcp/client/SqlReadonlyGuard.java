@@ -3,6 +3,9 @@ package io.github.vaquarkhan.flinkmcp.client;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
+/**
+ * @author Viquar Khan
+ */
 public final class SqlReadonlyGuard {
 
     private static final String[] ALLOWED = {"SELECT", "WITH", "SHOW", "DESCRIBE", "DESC", "EXPLAIN"};

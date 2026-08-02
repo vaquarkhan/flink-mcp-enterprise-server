@@ -15,6 +15,9 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author Viquar Khan
+ */
 public final class SqlGatewayClient {
 
     public static final class GatewayException extends RuntimeException {

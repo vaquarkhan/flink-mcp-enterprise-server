@@ -18,6 +18,9 @@ import io.modelcontextprotocol.spec.McpSchema;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * @author Viquar Khan
+ */
 class GovernanceTest {
 
     private static Governance gov(Config config) {

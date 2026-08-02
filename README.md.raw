@@ -1,0 +1,230 @@
+﻿# Flink MCP Enterprise Server
+
+Production-grade **Model Context Protocol (MCP)** server for [Apache Flink](https://flink.apache.org/).
+Governed tool access to the Flink REST API and SQL Gateway ΓÇö secure by default, observable, and review-ready.
+
+**Artifact:** `io.github.vaquarkhan:flink-mcp-server:0.2.0`  
+**Repo:** https://github.com/vaquarkhan/flink-mcp-enterprise-server  
+**License:** Apache-2.0
+
+Compared to community Flink MCP projects ([Ashfaqbs/apache-flink-mcp-server](https://github.com/Ashfaqbs/apache-flink-mcp-server), [Cledar/flink-mcp](https://github.com/Cledar/flink-mcp)), this server adds a full **governance plane**: approval tokens, policy deny-lists, rate limits, circuit breakers, output DLP, hash-chained audit, Prometheus metrics, and fail-closed HTTP auth.
+
+---
+
+## Quick start
+
+```bash
+mvn clean package
+# Tests run: 39+, Failures: 0
+
+# stdio (read-only default) ΓÇö stdout = MCP JSON-RPC, stderr = logs
+FLINK_REST_URL=http://localhost:8081 \
+java -jar target/flink-mcp-server-0.2.0-all.jar
+
+# HTTP (Bearer required)
+MCP_FLINK_TRANSPORT=http \
+MCP_FLINK_HTTP_BEARER_TOKEN=change-me \
+FLINK_REST_URL=http://localhost:8081 \
+java -jar target/flink-mcp-server-0.2.0-all.jar
+```
+
+Ops endpoints (HTTP mode): `GET /healthz`, `GET /readyz`, `GET /metrics` (Prometheus). MCP: `/mcp`.
+
+---
+
+## Default tool surface (read profile)
+
+| Tool | Backend |
+|------|---------|
+| `get_cluster_info` | `GET /overview` |
+| `get_flink_config` | `GET /config` |
+| `list_taskmanagers` | `GET /taskmanagers` |
+| `list_jobs` | `GET /jobs/overview` |
+| `get_job` / `get_job_status` / `get_job_config` | job detail endpoints |
+| `get_job_exceptions` / `get_job_metrics` / `list_checkpoints` | job diagnostics |
+| `list_jars` | `GET /jars` |
+| `run_sql_readonly` | SQL Gateway (SELECT/WITH/SHOW/DESCRIBE/EXPLAIN only) |
+
+### Write tools (off until unlocked)
+
+Require `MCP_FLINK_WRITE_ENABLED=true` **and** `MCP_FLINK_APPROVAL_SECRET`, plus a single-use HMAC approval token:
+
+`trigger_savepoint`, `rescale_job`, `upload_jar`, `run_jar`, `stop_job`, `cancel_job`, `run_sql_ddl_dml`
+
+```bash
+java -cp target/flink-mcp-server-0.2.0-all.jar \
+  io.github.vaquarkhan.flinkmcp.security.ApprovalTokens <secret> stop_job <jobId> 300
+```
+
+`upload_jar` also requires `MCP_FLINK_JAR_UPLOAD_ALLOW_DIRS` (fail-closed path allow-list).
+
+### Resources
+
+`flink://cluster/overview`, `flink://jobs`, `flink://health` (self + Flink + gateway ping),  
+`flink://audit/recent`, `flink://metrics`, `flink://metrics/prometheus`
+
+---
+
+## Twelve-factor / cloud-native checklist
+
+| Factor | Implementation |
+|--------|----------------|
+| I. Codebase | Single Maven module, Apache-2.0 |
+| II. Dependencies | Explicit Maven coords (MCP SDK 1.1.3, Jetty 12, SLF4J/Logback) |
+| III. Config | All settings via env (`Config.fromEnv()` + fail-fast `validate()`) |
+| IV. Backing services | Flink REST + SQL Gateway treated as attached resources |
+| V. Build/release/run | `mvn package` ΓåÆ thin + shaded `-all` jar |
+| VI. Processes | Stateless MCP process; in-memory audit/metrics (export via resources/HTTP) |
+| VII. Port binding | Self-contained Jetty (`MCP_FLINK_HTTP_HOST`/`PORT`) |
+| VIII. Concurrency | Bounded backend pool (4ΓÇô32, queue 128, AbortPolicy) |
+| IX. Disposability | Shutdown hook drains pool + stops Jetty |
+| X. Dev/prod parity | Same jar; env switches transport/auth/writes |
+| XI. Logs | **stderr only** (stdout reserved for MCP); MDC `trace=` on every line |
+| XII. Admin processes | ApprovalTokens CLI; `/healthz` `/readyz` `/metrics` |
+
+Extra production factors: **secure-by-default**, **DLP redaction**, **path-injection defense**, **circuit breaker**, **rate limit**, **policy engine**.
+
+---
+
+## Environment reference
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `FLINK_REST_URL` | `http://localhost:8081` | JobManager REST |
+| `MCP_FLINK_GATEWAY_URL` | `http://localhost:8083` | SQL Gateway |
+| `MCP_FLINK_REST_AUTH_HEADER` | ΓÇö | Optional `Bearer ΓÇª` / `Basic ΓÇª` to Flink |
+| `MCP_FLINK_GATEWAY_AUTH_HEADER` | ΓÇö | Optional auth to Gateway |
+| `MCP_FLINK_WRITE_ENABLED` | `false` | Master write switch |
+| `MCP_FLINK_APPROVAL_SECRET` | ΓÇö | Required if writes enabled |
+| `MCP_FLINK_APPROVAL_TTL_MS` | `300000` | Token TTL |
+| `MCP_FLINK_READONLY_CALLER` | `false` | Force read-only caller |
+| `MCP_FLINK_RPS` | `5` | Global rate limit |
+| `MCP_FLINK_BREAKER_FAILURES` | `5` | Circuit breaker threshold |
+| `MCP_FLINK_BREAKER_RESET_MS` | `30000` | Open ΓåÆ half-open window |
+| `MCP_FLINK_MAX_BYTES` | `65536` | Output bound |
+| `MCP_FLINK_DLP_ENABLED` | `true` | Redact secrets/JWT/email |
+| `MCP_FLINK_TRANSPORT` | `stdio` | `stdio` \| `http` |
+| `MCP_FLINK_HTTP_HOST` | `127.0.0.1` | Bind address |
+| `MCP_FLINK_HTTP_PORT` | `8090` | HTTP port |
+| `MCP_FLINK_HTTP_BEARER_TOKEN` | ΓÇö | **Required** for HTTP |
+| `MCP_FLINK_TOOL_TIMEOUT_MS` | `30000` | Backend timeout |
+| `MCP_FLINK_POLICY_FILE` | ΓÇö | Deny rules file |
+| `MCP_FLINK_TOOLS_ALLOWED` | default reads | CSV allow-list |
+| `MCP_FLINK_SCOPE_JOBS_ALLOW` | `*` | Job scope |
+| `MCP_FLINK_SCOPE_JARS_ALLOW` | `*` | Jar scope |
+| `MCP_FLINK_JAR_UPLOAD_ALLOW_DIRS` | ΓÇö | Required for `upload_jar` |
+| `MCP_FLINK_MAX_SQL_CHARS` | `32768` | SQL size cap |
+| `MCP_FLINK_SHUTDOWN_TIMEOUT_MS` | `15000` | Drain timeout |
+| `MCP_FLINK_LOG_LEVEL` | `INFO` | `DEBUG`/`INFO`/`WARN`/`ERROR` |
+
+Policy file sample: [`config/policy.sample`](config/policy.sample)
+
+---
+
+## Security model
+
+1. **Read-only by default** ΓÇö mutate/destructive tools not registered until writes unlocked.  
+2. **Approval tokens** ΓÇö HMAC-SHA256, expiry, nonce anti-replay, job/jar scope binding.  
+3. **Policy engine** ΓÇö `deny tool <glob>` / `deny job <glob>`; missing file = fail-closed.  
+4. **HTTP** ΓÇö Bearer constant-time compare; refuses to start without token.  
+5. **Input hygiene** ΓÇö ID charset + `..` reject; jar path allow-list; SQL length + readonly guard.  
+6. **Output DLP** ΓÇö redacts keys, JWTs, PEM headers, emails, Bearer tokens; truncates.  
+7. **Logs never on stdout** ΓÇö prevents MCP protocol corruption.
+
+---
+
+## Observability
+
+- **Logs:** stderr Logback with `trace=<id>` MDC on every governance call.  
+- **Metrics:** in-process counters + latency p50/p95/p99 ΓåÆ JSON resource + Prometheus (`/metrics` or `flink://metrics/prometheus`).  
+- **Audit:** hash-chained ring (500) ΓåÆ `flink://audit/recent` + `verifyChain()`.  
+- **Health:** `flink://health` and HTTP `/healthz`/`/readyz` (ready probes Flink REST).
+
+---
+
+## Build / Maven Central
+
+| | Link |
+|---|---|
+| **Maven Central** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server |
+| **v0.2.0** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server/0.2.0 |
+| **repo1** | https://repo1.maven.org/maven2/io/github/vaquarkhan/flink-mcp-server/ |
+| **Publish guide** | [docs/PUBLISHING.md](docs/PUBLISHING.md) |
+
+```bash
+mvn clean package                    # unit tests + jacoco + shaded jar
+mvn -Prelease package                # sources + javadoc (+ gpg if configured)
+```
+
+Publish (requires Sonatype Central credentials + GPG):
+
+```bash
+# ~/.m2/settings.xml server id = central
+mvn -Prelease deploy
+```
+
+### Maven coordinates
+
+```xml
+<dependency>
+  <groupId>io.github.vaquarkhan</groupId>
+  <artifactId>flink-mcp-server</artifactId>
+  <version>0.2.0</version>
+</dependency>
+```
+
+```bash
+mvn -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:get \
+  -Dartifact=io.github.vaquarkhan:flink-mcp-server:0.2.0:jar:all
+```
+
+---
+
+## Docker
+
+```bash
+docker build -t flink-mcp-server:0.2.0 .
+docker run --rm -e FLINK_REST_URL=http://host.docker.internal:8081 \
+  -e MCP_FLINK_TRANSPORT=http -e MCP_FLINK_HTTP_BEARER_TOKEN=secret \
+  -e MCP_FLINK_HTTP_HOST=0.0.0.0 -p 8090:8090 flink-mcp-server:0.2.0
+```
+
+---
+
+## Cursor / Claude MCP config (stdio)
+
+```json
+{
+  "mcpServers": {
+    "flink": {
+      "command": "java",
+      "args": ["-jar", "/path/to/flink-mcp-server-0.2.0-all.jar"],
+      "env": {
+        "FLINK_REST_URL": "http://localhost:8081",
+        "MCP_FLINK_GATEWAY_URL": "http://localhost:8083",
+        "MCP_FLINK_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Threat model (summary)
+
+| Threat | Mitigation |
+|--------|------------|
+| Prompt-injected destructive Flink ops | Writes off; approval + policy + scopes |
+| Path injection in REST URLs | `Inputs.requireId` / `requireInt` |
+| Local file exfil via upload_jar | Directory allow-list |
+| Token replay | Nonce store + TTL |
+| Secret leakage in tool output | DLP redaction + size bound |
+| Unauthenticated HTTP MCP | Fail-closed Bearer |
+| Log/protocol mix-up | stderr-only logging |
+
+---
+
+## License
+
+Copyright 2026 Vaquar Khan. Licensed under the Apache License, Version 2.0.

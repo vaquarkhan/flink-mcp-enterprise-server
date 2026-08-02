@@ -7,6 +7,9 @@ import org.slf4j.MDC;
  * Per-request correlation id. Stored in a ThreadLocal and mirrored into SLF4J MDC
  * key {@code trace} so every log line is correlatable (stderr-only logging).
  */
+/**
+ * @author Viquar Khan
+ */
 public final class Trace {
 
     public static final String MDC_KEY = "trace";

@@ -1,3 +1,4 @@
+# Author: Viquar Khan
 # Deny rules for Flink MCP Server (MCP_FLINK_POLICY_FILE)
 # Blank lines and # comments are ignored.
 # Glob: * -> .*, ? -> .

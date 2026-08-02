@@ -33,6 +33,9 @@ import org.eclipse.jetty.server.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author Viquar Khan
+ */
 public final class FlinkMcpServer {
 
     public static final String VERSION = "0.2.0";

@@ -6,6 +6,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Per-tool circuit breaker. HALF_OPEN allows a single probe; success closes, failure re-opens.
  */
+/**
+ * @author Viquar Khan
+ */
 public final class CircuitBreaker {
 
     private enum State { CLOSED, OPEN, HALF_OPEN }

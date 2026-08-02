@@ -1,0 +1,1 @@
+{"cases": {"allow": ["SELECT 1", "SHOW TABLES"], "deny": ["INSERT INTO t VALUES (1)", "DROP TABLE t"]}}

@@ -15,6 +15,9 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author Viquar Khan
+ */
 public final class FlinkRestClient {
 
     public static final class BackendException extends RuntimeException {

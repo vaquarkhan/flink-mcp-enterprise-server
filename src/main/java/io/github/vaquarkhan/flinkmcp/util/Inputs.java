@@ -5,6 +5,9 @@ import java.nio.file.Path;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+/**
+ * @author Viquar Khan
+ */
 public final class Inputs {
 
     public static final class InvalidInput extends RuntimeException {

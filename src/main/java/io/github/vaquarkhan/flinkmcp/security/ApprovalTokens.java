@@ -7,6 +7,9 @@ import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * @author Viquar Khan
+ */
 public final class ApprovalTokens {
 
     private final byte[] secret;

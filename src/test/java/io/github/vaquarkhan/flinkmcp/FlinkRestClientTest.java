@@ -14,6 +14,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+/**
+ * @author Viquar Khan
+ */
 class FlinkRestClientTest {
 
     private static HttpServer server;

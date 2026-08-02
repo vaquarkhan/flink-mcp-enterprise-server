@@ -2,6 +2,9 @@ package io.github.vaquarkhan.flinkmcp.governance;
 
 import java.util.regex.Pattern;
 
+/**
+ * @author Viquar Khan
+ */
 public final class OutputControls {
 
     private static final Pattern[] DLP = {

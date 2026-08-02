@@ -1,3 +1,4 @@
+<!-- Author: Viquar Khan -->
 <configuration>
   <!-- All logs to STDERR — stdout is reserved for MCP JSON-RPC -->
   <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">

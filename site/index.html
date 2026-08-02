@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="author" content="Viquar Khan">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flink MCP Enterprise</title>
+  <meta name="description" content="Production-grade governed MCP server for Apache Flink — secure-by-default tools, approvals, DLP, audit, and Prometheus telemetry.">
+  <meta property="og:title" content="Flink MCP Enterprise">
+  <meta property="og:description" content="Governed Flink tool access for AI agents — REST & SQL Gateway with a fail-closed control plane.">
+  <meta property="og:image" content="https://vaquarkhan.github.io/flink-mcp-enterprise-server/assets/flink-mcp-banner.svg">
+  <meta property="og:url" content="https://vaquarkhan.github.io/flink-mcp-enterprise-server/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;550;650;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="hero-veil" aria-hidden="true"></div>
+
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="./">
+        <span class="mark" aria-hidden="true"></span>
+        Flink MCP Enterprise
+      </a>
+      <div class="nav-actions" role="list">
+        <a class="nav-pill nav-pill-hot" role="listitem" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server#developer-tutorial" aria-label="Open the tutorial">
+          <span class="nav-hot-ring" aria-hidden="true"></span>
+          <span class="nav-hot-label">Tutorial</span>
+          <span class="nav-hot-go" aria-hidden="true">Go</span>
+        </a>
+        <a class="nav-pill" role="listitem" href="#pipeline">Pipeline</a>
+        <a class="nav-pill" role="listitem" href="#features">Features</a>
+        <a class="nav-pill" role="listitem" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server/tree/main/examples" target="_blank" rel="noopener">Examples</a>
+        <a class="nav-pill" role="listitem" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </nav>
+
+    <div class="hero-inner" id="main">
+      <h1 class="hero-brand">Flink MCP Enterprise</h1>
+      <p class="hero-line">
+        A <strong>production Java</strong> Model Context Protocol server for Apache Flink:
+        secure-by-default tools over REST &amp; SQL Gateway, with approvals, policy, DLP, audit, and Prometheus metrics.
+      </p>
+      <a class="deck-magnet" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server/blob/main/doc/tutorial.md">
+        <span class="deck-art" aria-hidden="true">
+          <span class="deck-slide s1"></span>
+          <span class="deck-slide s2"></span>
+          <span class="deck-slide s3"></span>
+          <span class="deck-play">→</span>
+        </span>
+        <span class="deck-copy">
+          <strong>Start the developer tutorial</strong>
+          <span>From cluster health to governed stop_job — click to open</span>
+        </span>
+        <span class="deck-arrow" aria-hidden="true">→</span>
+      </a>
+      <div class="cta">
+        <a class="btn btn-ghost" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server/blob/main/doc/getting-started.md">Getting started</a>
+        <a class="btn btn-ghost" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server/tree/main/doc">Docs</a>
+        <a class="btn btn-ghost" href="https://github.com/vaquarkhan/flink-mcp-enterprise-server" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/vaquarkhan/kafka-mcp-enterprise-server" target="_blank" rel="noopener">Sister: Kafka MCP</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="section" id="pipeline">
+    <div class="wrap">
+      <h2>Fail-closed by design</h2>
+      <p class="lede">
+        Every <code>tools/call</code> walks ordered gates. The first denial wins. Flink ACLs stay authoritative when present.
+      </p>
+      <div class="pipeline" aria-label="Security pipeline stages">
+        <div class="step"><b>01</b><span>Expose</span></div>
+        <div class="step"><b>02</b><span>Scope</span></div>
+        <div class="step"><b>03</b><span>Policy</span></div>
+        <div class="step"><b>04</b><span>Approval</span></div>
+        <div class="step"><b>05</b><span>Rate</span></div>
+        <div class="step"><b>06</b><span>Breaker</span></div>
+        <div class="step"><b>07</b><span>Execute</span></div>
+        <div class="step"><b>08</b><span>DLP</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <div class="wrap">
+      <h2>What ships</h2>
+      <p class="lede">
+        Java 17 · MCP SDK 1.1.3 · Jetty 12 HTTP · 12 default read tools · gated writes · stderr-only logs with MDC <code>trace=</code>.
+      </p>
+      <figure class="feat-banner">
+        <img src="assets/flink-mcp-features.svg" width="1200" height="620" alt="Flink MCP features: governance, tools, observability">
+      </figure>
+      <div class="grid-3">
+        <article class="cardish">
+          <h3>For SREs</h3>
+          <p>Inspect jobs, TaskManagers, checkpoints, and exceptions without a god principal.</p>
+        </article>
+        <article class="cardish">
+          <h3>For platform teams</h3>
+          <p>Change-window approvals, policy deny files, jar path allow-lists, Bearer HTTP.</p>
+        </article>
+        <article class="cardish">
+          <h3>For security</h3>
+          <p>Output DLP, hash-chained audit, rate limits, circuit breakers, path-injection defense.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="run">
+    <div class="wrap">
+      <h2>Run it</h2>
+      <pre><code>mvn clean package
+FLINK_REST_URL=http://localhost:8081 \
+java -jar target/flink-mcp-server-0.2.0-all.jar</code></pre>
+      <p class="lede">Then walk the <a href="https://github.com/vaquarkhan/flink-mcp-enterprise-server/tree/main/examples">examples/</a> against a real Flink cluster.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>Apache-2.0 · <a href="https://github.com/vaquarkhan/flink-mcp-enterprise-server">vaquarkhan/flink-mcp-enterprise-server</a></p>
+    </div>
+  </footer>
+</body>
+</html>

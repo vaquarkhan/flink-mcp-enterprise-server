@@ -11,6 +11,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
+/**
+ * @author Viquar Khan
+ */
 public final class BearerAuthFilter implements Filter {
 
     private final byte[] expected;

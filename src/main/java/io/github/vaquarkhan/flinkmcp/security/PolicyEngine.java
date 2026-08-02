@@ -7,6 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+/**
+ * @author Viquar Khan
+ */
 public final class PolicyEngine {
 
     private final boolean failClosed;

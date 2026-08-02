@@ -21,6 +21,9 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * @author Viquar Khan
+ */
 public final class Governance {
 
     private static final Logger LOG = LoggerFactory.getLogger(Governance.class);

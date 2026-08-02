@@ -23,6 +23,9 @@ import org.slf4j.LoggerFactory;
  * Embedded Jetty for streamable HTTP MCP plus ops endpoints:
  * {@code /healthz}, {@code /readyz}, {@code /metrics} (Prometheus).
  */
+/**
+ * @author Viquar Khan
+ */
 public final class HttpTransportServer {
 
     private static final Logger LOG = LoggerFactory.getLogger(HttpTransportServer.class);

@@ -1,0 +1,7 @@
+{
+  "change_ticket": "CHG-4421",
+  "tool": "stop_job",
+  "jobId": "job-demo-1",
+  "ttl_seconds": 300,
+  "secret": "dev-only-secret-change-me"
+}

@@ -1,5 +1,8 @@
 package io.github.vaquarkhan.flinkmcp.governance;
 
+/**
+ * @author Viquar Khan
+ */
 public final class RateLimiter {
 
     private final int maxPerSecond;

@@ -1,5 +1,7 @@
 # Flink MCP Enterprise Server
 
+Author: Viquar Khan
+
 Production-grade **Model Context Protocol (MCP)** server for [Apache Flink](https://flink.apache.org/).
 Governed tool access to the Flink REST API and SQL Gateway — secure by default, observable, and review-ready.
 
@@ -227,4 +229,4 @@ docker run --rm -e FLINK_REST_URL=http://host.docker.internal:8081 \
 
 ## License
 
-Copyright 2026 Vaquar Khan. Licensed under the Apache License, Version 2.0.
+Copyright 2026 Viquar Khan. Licensed under the Apache License, Version 2.0.

@@ -1,0 +1,10 @@
+{
+  "persona": "Alex — night-shift SRE",
+  "goal": "Triage Flink capacity without mutate tools",
+  "checks": [
+    "GET /overview returns 200",
+    "GET /taskmanagers returns 200",
+    "GET /jobs/overview returns 200",
+    "Default MCP profile hides stop_job"
+  ]
+}

@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * @author Viquar Khan
+ */
 public final class Metrics {
 
     private static final int RESERVOIR = 1024;

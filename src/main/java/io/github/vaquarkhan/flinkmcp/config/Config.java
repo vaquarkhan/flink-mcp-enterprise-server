@@ -11,6 +11,9 @@ import java.util.Set;
  * Twelve-factor configuration: all runtime settings come from the environment.
  * Call {@link #validate()} at startup (fail-fast).
  */
+/**
+ * @author Viquar Khan
+ */
 public final class Config {
 
     public static final Set<String> DEFAULT_READ_TOOLS = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(

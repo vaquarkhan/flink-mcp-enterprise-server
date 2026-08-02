@@ -4,6 +4,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * @author Viquar Khan
+ */
 public final class NonceStore {
 
     private final ConcurrentHashMap<String, Long> seen = new ConcurrentHashMap<>();

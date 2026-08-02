@@ -1,7 +1,8 @@
 # Publishing to Maven Central
 
-## Artifact links (after publish)
+Author: Viquar Khan
 
+## Artifact links (after publish)
 | | URL |
 |---|-----|
 | **Maven Central (browse)** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server |
@@ -30,7 +31,6 @@ https://repo1.maven.org/maven2/io/github/vaquarkhan/flink-mcp-server/0.2.0/flink
 (Only available if the `-all` jar is attached and published; otherwise use GitHub Releases or build locally.)
 
 ## Prerequisites
-
 1. [Sonatype Central Portal](https://central.sonatype.com/) account linked to `io.github.vaquarkhan`
 2. GPG key pair for signing artifacts
 3. `~/.m2/settings.xml`:
@@ -48,7 +48,6 @@ https://repo1.maven.org/maven2/io/github/vaquarkhan/flink-mcp-server/0.2.0/flink
 ```
 
 ## Local release artifacts
-
 ```bash
 mvn clean package
 # produces:
@@ -63,7 +62,6 @@ mvn "-Dgpg.skip=true" -Prelease package
 ```
 
 ## Deploy
-
 ```bash
 mvn -Prelease clean deploy
 ```
@@ -71,7 +69,6 @@ mvn -Prelease clean deploy
 The `central-publishing-maven-plugin` (server id `central`) uploads and can auto-publish when `autoPublish=true`.
 
 ## Verify after publish
-
 Open: https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server/0.2.0
 
 Or:

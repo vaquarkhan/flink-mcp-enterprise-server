@@ -13,6 +13,9 @@ import io.github.vaquarkhan.flinkmcp.security.ApprovalTokens;
 import io.github.vaquarkhan.flinkmcp.security.NonceStore;
 import org.junit.jupiter.api.Test;
 
+/**
+ * @author Viquar Khan
+ */
 class GuardrailsTest {
 
     @Test

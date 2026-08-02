@@ -21,6 +21,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/**
+ * @author Viquar Khan
+ */
 class ProductionHardeningTest {
 
     @Test
