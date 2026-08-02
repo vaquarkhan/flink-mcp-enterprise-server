@@ -2,12 +2,28 @@
 
 Author: Viquar Khan
 
+[![CI](https://github.com/vaquarkhan/flink-mcp-enterprise-server/actions/workflows/ci.yml/badge.svg)](https://github.com/vaquarkhan/flink-mcp-enterprise-server/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg)](pom.xml)
+[![Maven Central](https://img.shields.io/badge/maven%20central-io.github.vaquarkhan%3Aflink--mcp--server-blue.svg)](https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server)
+
 Production-grade **Model Context Protocol (MCP)** server for [Apache Flink](https://flink.apache.org/).
 Governed tool access to the Flink REST API and SQL Gateway — secure by default, observable, and review-ready.
 
 **Artifact:** `io.github.vaquarkhan:flink-mcp-server:0.2.0`  
 **Repo:** https://github.com/vaquarkhan/flink-mcp-enterprise-server  
+**Site:** https://vaquarkhan.github.io/flink-mcp-enterprise-server/  
 **License:** Apache-2.0
+
+### Agents & docs
+
+| | |
+|---|---|
+| **AGENTS.md** | [`AGENTS.md`](AGENTS.md) — rules for every coding agent |
+| **Skills** | [`.cursor/skills/`](.cursor/skills/) · [`skills/`](skills/) |
+| **Docs** | [`doc/`](doc/) · Getting started · Tutorial · Security |
+| **Examples** | [`examples/`](examples/) — download and run |
+| **Contributing** | [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) |
 
 Compared to community Flink MCP projects ([Ashfaqbs/apache-flink-mcp-server](https://github.com/Ashfaqbs/apache-flink-mcp-server), [Cledar/flink-mcp](https://github.com/Cledar/flink-mcp)), this server adds a full **governance plane**: approval tokens, policy deny-lists, rate limits, circuit breakers, output DLP, hash-chained audit, Prometheus metrics, and fail-closed HTTP auth.
 

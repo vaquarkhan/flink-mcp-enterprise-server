@@ -1,0 +1,21 @@
+# Author: Viquar Khan
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{java,xml,md,yml,yaml,json,py,sh,ps1,css,html}]
+indent_style = space
+indent_size = 2
+
+[*.java]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab

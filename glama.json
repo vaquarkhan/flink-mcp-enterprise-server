@@ -1,0 +1,19 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "name": "flink-mcp-enterprise-server",
+  "description": "Production-grade governed MCP server for Apache Flink (REST + SQL Gateway) with approval tokens, policy, DLP, and audit. Author: Viquar Khan.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vaquarkhan/flink-mcp-enterprise-server"
+  },
+  "homepage": "https://vaquarkhan.github.io/flink-mcp-enterprise-server/",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "apache-flink",
+    "java",
+    "streaming",
+    "governance",
+    "security"
+  ]
+}

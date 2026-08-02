@@ -1,0 +1,74 @@
+# CI — build and test (does not publish)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Maven (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["17", "21"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+      - name: Unit tests + package
+        run: mvn -B clean package
+      - name: Upload shaded jar
+        if: matrix.java == '17'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flink-mcp-server-all
+          path: target/flink-mcp-server-*-all.jar
+          if-no-files-found: error
+
+  examples:
+    name: Examples vs Flink
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Build jar
+        run: mvn -B -DskipTests package
+      - name: Start Flink
+        run: docker compose -f examples/docker-compose.yml up -d
+      - name: Wait for Flink
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8081/overview >/dev/null; then
+              echo "Flink ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Flink did not become ready"
+          docker compose -f examples/docker-compose.yml logs
+          exit 1
+      - name: Run examples
+        env:
+          FLINK_REST_URL: http://127.0.0.1:8081
+        run: python examples/run_all.py --skip-build
+      - name: Tear down
+        if: always()
+        run: docker compose -f examples/docker-compose.yml down -v
