@@ -1,5 +1,6 @@
 package io.github.vaquarkhan.flinkmcp.client;
 
+import io.github.vaquarkhan.flinkmcp.client.OutboundAuth;
 import io.github.vaquarkhan.flinkmcp.observability.Metrics;
 import io.github.vaquarkhan.flinkmcp.observability.Trace;
 import java.io.IOException;
@@ -186,14 +187,9 @@ public final class FlinkRestClient {
     }
 
     private void applyAuth(HttpRequest.Builder b) {
-        if (authHeader != null) {
-            // Full header value, e.g. "Bearer xxx" or "Basic xxx"
-            int sp = authHeader.indexOf(' ');
-            if (sp > 0) {
-                b.header("Authorization", authHeader);
-            } else {
-                b.header("Authorization", "Bearer " + authHeader);
-            }
+        String header = OutboundAuth.toAuthorizationValue(OutboundAuth.resolveFlink(authHeader));
+        if (header != null) {
+            b.header("Authorization", header);
         }
     }
 

@@ -13,6 +13,7 @@ import io.github.vaquarkhan.flinkmcp.observability.AuditLog;
 import io.github.vaquarkhan.flinkmcp.observability.Metrics;
 import io.github.vaquarkhan.flinkmcp.security.ApprovalTokens;
 import io.github.vaquarkhan.flinkmcp.security.BearerAuthFilter;
+import io.github.vaquarkhan.flinkmcp.security.CallerCredentials;
 import io.github.vaquarkhan.flinkmcp.security.NonceStore;
 import io.github.vaquarkhan.flinkmcp.security.PolicyEngine;
 import io.github.vaquarkhan.flinkmcp.security.TokenRegistry;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
  */
 public final class FlinkMcpServer {
 
-    public static final String VERSION = "0.3.0";
+    public static final String VERSION = "0.3.1";
     private static final Logger LOG = LoggerFactory.getLogger(FlinkMcpServer.class);
 
     private FlinkMcpServer() {}
@@ -299,6 +300,11 @@ public final class FlinkMcpServer {
             BearerAuthFilter authFilter;
             if (config.authTokensFile() != null) {
                 TokenRegistry registry = TokenRegistry.load(Path.of(config.authTokensFile()));
+                if (config.callerCredentialsFile() != null) {
+                    CallerCredentials creds = CallerCredentials.load(Path.of(config.callerCredentialsFile()));
+                    registry = registry.withCredentials(creds);
+                    LOG.info("loaded caller credentials entries={}", creds.size());
+                }
                 LOG.info("loaded auth token registry entries={}", registry.size());
                 authFilter = new BearerAuthFilter(registry);
             } else {
@@ -308,6 +314,10 @@ public final class FlinkMcpServer {
                         config.allowedJobs(),
                         config.allowedJars(),
                         config.readonlyCaller());
+                if (config.callerCredentialsFile() != null) {
+                    LOG.warn("MCP_FLINK_CALLER_CREDENTIALS_FILE is set but multi-token auth is not; "
+                            + "outbound credentials require MCP_FLINK_AUTH_TOKENS_FILE (O2B)");
+                }
             }
             TlsSettings tls = new TlsSettings(
                     config.httpTlsEnabled(),

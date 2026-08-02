@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.vaquarkhan.flinkmcp.client.OutboundAuth;
 import io.github.vaquarkhan.flinkmcp.config.Config;
 import io.github.vaquarkhan.flinkmcp.governance.CircuitBreaker;
 import io.github.vaquarkhan.flinkmcp.governance.Governance;
@@ -16,6 +17,7 @@ import io.github.vaquarkhan.flinkmcp.observability.Metrics;
 import io.github.vaquarkhan.flinkmcp.security.ApprovalTokens;
 import io.github.vaquarkhan.flinkmcp.security.BearerAuthFilter;
 import io.github.vaquarkhan.flinkmcp.security.CallerContext;
+import io.github.vaquarkhan.flinkmcp.security.CallerCredentials;
 import io.github.vaquarkhan.flinkmcp.security.CallerIdentity;
 import io.github.vaquarkhan.flinkmcp.security.NonceStore;
 import io.github.vaquarkhan.flinkmcp.security.PolicyEngine;
@@ -174,6 +176,44 @@ class OpenRemediationTest {
             });
         }
         assertTrue(breaker.isOpen("list_jobs"));
+    }
+
+    @Test
+    void o2b_outboundAuth_prefersCallerCredential() {
+        assertEquals("Bearer static", OutboundAuth.toAuthorizationValue(OutboundAuth.resolveFlink("Bearer static")));
+        CallerContext.set(new CallerIdentity(
+                "alice", Set.of("*"), Set.of("*"), false, "Bearer alice-flink", "Bearer alice-gw"));
+        assertEquals("Bearer alice-flink", OutboundAuth.toAuthorizationValue(OutboundAuth.resolveFlink("Bearer static")));
+        assertEquals("Bearer alice-gw", OutboundAuth.toAuthorizationValue(OutboundAuth.resolveGateway("Bearer static-gw")));
+    }
+
+    @Test
+    void o2b_credentialsFile_enrichesRegistry(@TempDir Path dir) throws Exception {
+        String token = "alice-mcp-token";
+        Path tokens = dir.resolve("tokens.txt");
+        Files.writeString(tokens, "alice : " + TokenRegistry.sha256Hex(token) + " : * : * : false\n");
+        Path creds = dir.resolve("creds.txt");
+        Files.writeString(creds, "alice : Bearer flink-alice : Bearer gw-alice\n");
+        TokenRegistry registry = TokenRegistry.load(tokens)
+                .withCredentials(CallerCredentials.load(creds));
+        CallerIdentity id = registry.authenticateBearerToken(token).orElseThrow();
+        assertEquals("Bearer flink-alice", id.flinkAuthHeader());
+        assertEquals("Bearer gw-alice", id.gatewayAuthHeader());
+    }
+
+    @Test
+    void o2b_governance_propagatesCallerToBackendPool() {
+        Governance g = gov(Config.builder().defaults().build(), new CircuitBreaker(5, 30_000));
+        CallerContext.set(new CallerIdentity(
+                "alice", Set.of("*"), Set.of("*"), false, "Bearer pool-check", null));
+        AtomicReference<String> seen = new AtomicReference<>();
+        McpSchema.CallToolRequest req = new McpSchema.CallToolRequest("list_jobs", Map.of());
+        McpSchema.CallToolResult r = g.run("list_jobs", ToolClass.READ, req, () -> {
+            seen.set(OutboundAuth.resolveFlink("Bearer fallback"));
+            return "ok";
+        });
+        assertFalse(Boolean.TRUE.equals(r.isError()));
+        assertEquals("Bearer pool-check", seen.get());
     }
 
     @Test

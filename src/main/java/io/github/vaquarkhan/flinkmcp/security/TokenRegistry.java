@@ -21,9 +21,12 @@ import java.util.Set;
  * Named HTTP callers loaded from {@code MCP_FLINK_AUTH_TOKENS_FILE}.
  * <p>
  * Line format (colon-separated):
- * {@code callerId : sha256Hex(token) : jobsAllowCsv : jarsAllowCsv : readonly(true|false)}
+ * {@code callerId : sha256Hex(token) : jobsAllowCsv : jarsAllowCsv : readonly
+ *   [: flinkAuthHeader [: gatewayAuthHeader]]}
  * <p>
- * Only token hashes are stored — never raw bearer secrets.
+ * Inbound MCP tokens are stored as hashes only. Optional fields 6–7 are outbound
+ * Flink/Gateway Authorization values (O2B); prefer {@link CallerCredentials} file
+ * when secrets should stay out of the tokens file.
  *
  * @author Viquar Khan
  */
@@ -49,9 +52,9 @@ public final class TokenRegistry {
                 continue;
             }
             String[] parts = Arrays.stream(line.split(":", -1)).map(String::trim).toArray(String[]::new);
-            if (parts.length != 5) {
+            if (parts.length < 5 || parts.length > 7) {
                 throw new IllegalArgumentException(
-                        "auth tokens file line " + lineNo + ": expected 5 colon fields, got " + parts.length);
+                        "auth tokens file line " + lineNo + ": expected 5..7 colon fields, got " + parts.length);
             }
             String callerId = parts[0];
             String hash = parts[1].toLowerCase(Locale.ROOT);
@@ -62,11 +65,14 @@ public final class TokenRegistry {
             Set<String> jobs = parseCsv(parts[2]);
             Set<String> jars = parseCsv(parts[3]);
             boolean readonly = Boolean.parseBoolean(parts[4]);
+            String flinkAuth = parts.length >= 6 ? parts[5] : null;
+            String gatewayAuth = parts.length >= 7 ? parts[6] : null;
             if (jobs.isEmpty() || jars.isEmpty()) {
                 throw new IllegalArgumentException(
                         "auth tokens file line " + lineNo + ": jobs/jars allow lists must not be empty");
             }
-            if (map.put(hash, new CallerIdentity(callerId, jobs, jars, readonly)) != null) {
+            CallerIdentity identity = new CallerIdentity(callerId, jobs, jars, readonly, flinkAuth, gatewayAuth);
+            if (map.put(hash, identity) != null) {
                 throw new IllegalArgumentException(
                         "auth tokens file line " + lineNo + ": duplicate token hash");
             }
@@ -75,6 +81,18 @@ public final class TokenRegistry {
             throw new IllegalArgumentException("auth tokens file has no entries: " + file);
         }
         return new TokenRegistry(map);
+    }
+
+    /** Overlay per-caller outbound credentials (credentials file wins when set). */
+    public TokenRegistry withCredentials(CallerCredentials credentials) {
+        if (credentials == null || credentials.size() == 0) {
+            return this;
+        }
+        Map<String, CallerIdentity> enriched = new LinkedHashMap<>();
+        for (Map.Entry<String, CallerIdentity> e : byTokenHash.entrySet()) {
+            enriched.put(e.getKey(), credentials.enrich(e.getValue()));
+        }
+        return new TokenRegistry(enriched);
     }
 
     public Optional<CallerIdentity> authenticateBearerToken(String rawToken) {

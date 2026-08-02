@@ -1,5 +1,6 @@
 package io.github.vaquarkhan.flinkmcp.client;
 
+import io.github.vaquarkhan.flinkmcp.client.OutboundAuth;
 import io.github.vaquarkhan.flinkmcp.observability.Metrics;
 import io.github.vaquarkhan.flinkmcp.util.Inputs;
 import io.modelcontextprotocol.json.McpJsonMapper;
@@ -158,9 +159,9 @@ public final class SqlGatewayClient {
             HttpRequest.Builder b = HttpRequest.newBuilder()
                     .uri(URI.create(baseUrl + p))
                     .timeout(Duration.ofSeconds(30));
-            if (authHeader != null) {
-                int sp = authHeader.indexOf(' ');
-                b.header("Authorization", sp > 0 ? authHeader : "Bearer " + authHeader);
+            String auth = OutboundAuth.toAuthorizationValue(OutboundAuth.resolveGateway(authHeader));
+            if (auth != null) {
+                b.header("Authorization", auth);
             }
             byte[] out = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
             metrics.addBytesOut(out.length);

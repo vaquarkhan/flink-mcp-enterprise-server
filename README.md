@@ -10,7 +10,7 @@ Author: Viquar Khan
 Production-grade **Model Context Protocol (MCP)** server for [Apache Flink](https://flink.apache.org/).
 Governed tool access to the Flink REST API and SQL Gateway — secure by default, observable, and review-ready.
 
-**Artifact:** `io.github.vaquarkhan:flink-mcp-server:0.3.0`  
+**Artifact:** `io.github.vaquarkhan:flink-mcp-server:0.3.1`  
 **Repo:** https://github.com/vaquarkhan/flink-mcp-enterprise-server  
 **Site:** https://vaquarkhan.github.io/flink-mcp-enterprise-server/  
 **License:** Apache-2.0
@@ -37,13 +37,13 @@ mvn clean package
 
 # stdio (read-only default) — stdout = MCP JSON-RPC, stderr = logs
 FLINK_REST_URL=http://localhost:8081 \
-java -jar target/flink-mcp-server-0.3.0-all.jar
+java -jar target/flink-mcp-server-0.3.1-all.jar
 
 # HTTP (Bearer required)
 MCP_FLINK_TRANSPORT=http \
 MCP_FLINK_HTTP_BEARER_TOKEN=change-me \
 FLINK_REST_URL=http://localhost:8081 \
-java -jar target/flink-mcp-server-0.3.0-all.jar
+java -jar target/flink-mcp-server-0.3.1-all.jar
 ```
 
 Ops endpoints (HTTP mode): `GET /healthz`, `GET /readyz`, `GET /metrics` (Prometheus). MCP: `/mcp`.
@@ -95,7 +95,7 @@ Require `MCP_FLINK_WRITE_ENABLED=true` **and** `MCP_FLINK_APPROVAL_SECRET`, plus
 `trigger_savepoint`, `rescale_job`, `upload_jar`, `run_jar`, `stop_job`, `cancel_job`, `run_sql_ddl_dml`
 
 ```bash
-java -cp target/flink-mcp-server-0.3.0-all.jar \
+java -cp target/flink-mcp-server-0.3.1-all.jar \
   io.github.vaquarkhan.flinkmcp.security.ApprovalTokens <secret> stop_job <jobId> 300
 ```
 
@@ -190,7 +190,7 @@ Policy file sample: [`config/policy.sample`](config/policy.sample)
 | | Link |
 |---|---|
 | **Maven Central** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server |
-| **v0.3.0** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server/0.3.0 |
+| **v0.3.1** | https://central.sonatype.com/artifact/io.github.vaquarkhan/flink-mcp-server/0.3.1 |
 | **repo1** | https://repo1.maven.org/maven2/io/github/vaquarkhan/flink-mcp-server/ |
 | **Publish guide** | [docs/PUBLISHING.md](docs/PUBLISHING.md) |
 
@@ -212,13 +212,13 @@ mvn -Prelease deploy
 <dependency>
   <groupId>io.github.vaquarkhan</groupId>
   <artifactId>flink-mcp-server</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.1</version>
 </dependency>
 ```
 
 ```bash
 mvn -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:get \
-  -Dartifact=io.github.vaquarkhan:flink-mcp-server:0.3.0:jar:all
+  -Dartifact=io.github.vaquarkhan:flink-mcp-server:0.3.1:jar:all
 ```
 
 ---
@@ -226,10 +226,10 @@ mvn -q org.apache.maven.plugins:maven-dependency-plugin:3.6.1:get \
 ## Docker
 
 ```bash
-docker build -t flink-mcp-server:0.3.0 .
+docker build -t flink-mcp-server:0.3.1 .
 docker run --rm -e FLINK_REST_URL=http://host.docker.internal:8081 \
   -e MCP_FLINK_TRANSPORT=http -e MCP_FLINK_HTTP_BEARER_TOKEN=secret \
-  -e MCP_FLINK_HTTP_HOST=0.0.0.0 -p 8090:8090 flink-mcp-server:0.3.0
+  -e MCP_FLINK_HTTP_HOST=0.0.0.0 -p 8090:8090 flink-mcp-server:0.3.1
 ```
 
 ---
@@ -241,7 +241,7 @@ docker run --rm -e FLINK_REST_URL=http://host.docker.internal:8081 \
   "mcpServers": {
     "flink": {
       "command": "java",
-      "args": ["-jar", "/path/to/flink-mcp-server-0.3.0-all.jar"],
+      "args": ["-jar", "/path/to/flink-mcp-server-0.3.1-all.jar"],
       "env": {
         "FLINK_REST_URL": "http://localhost:8081",
         "MCP_FLINK_GATEWAY_URL": "http://localhost:8083",

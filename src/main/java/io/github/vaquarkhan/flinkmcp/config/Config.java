@@ -58,6 +58,7 @@ public final class Config {
     private final String httpHost;
     private final String httpBearerToken;
     private final String authTokensFile;
+    private final String callerCredentialsFile;
     private final boolean httpTlsEnabled;
     private final String httpTlsKeystore;
     private final String httpTlsKeystorePassword;
@@ -92,6 +93,7 @@ public final class Config {
         this.httpHost = b.httpHost;
         this.httpBearerToken = b.httpBearerToken;
         this.authTokensFile = b.authTokensFile;
+        this.callerCredentialsFile = b.callerCredentialsFile;
         this.httpTlsEnabled = b.httpTlsEnabled;
         this.httpTlsKeystore = b.httpTlsKeystore;
         this.httpTlsKeystorePassword = b.httpTlsKeystorePassword;
@@ -129,6 +131,7 @@ public final class Config {
             b.httpHost = env("MCP_FLINK_HTTP_HOST", b.httpHost);
             b.httpBearerToken = System.getenv("MCP_FLINK_HTTP_BEARER_TOKEN");
             b.authTokensFile = blankToNull(System.getenv("MCP_FLINK_AUTH_TOKENS_FILE"));
+            b.callerCredentialsFile = blankToNull(System.getenv("MCP_FLINK_CALLER_CREDENTIALS_FILE"));
             b.httpTlsEnabled = Boolean.parseBoolean(env("MCP_FLINK_HTTP_TLS_ENABLED", "false"));
             b.httpTlsKeystore = blankToNull(System.getenv("MCP_FLINK_HTTP_TLS_KEYSTORE"));
             b.httpTlsKeystorePassword = System.getenv("MCP_FLINK_HTTP_TLS_KEYSTORE_PASSWORD");
@@ -281,6 +284,7 @@ public final class Config {
     public String httpHost() { return httpHost; }
     public String httpBearerToken() { return httpBearerToken; }
     public String authTokensFile() { return authTokensFile; }
+    public String callerCredentialsFile() { return callerCredentialsFile; }
     public boolean httpTlsEnabled() { return httpTlsEnabled; }
     public String httpTlsKeystore() { return httpTlsKeystore; }
     public String httpTlsKeystorePassword() { return httpTlsKeystorePassword; }
@@ -333,6 +337,7 @@ public final class Config {
         private String httpHost = "127.0.0.1";
         private String httpBearerToken;
         private String authTokensFile;
+        private String callerCredentialsFile;
         private boolean httpTlsEnabled = false;
         private String httpTlsKeystore;
         private String httpTlsKeystorePassword;
@@ -395,6 +400,11 @@ public final class Config {
 
         public Builder authTokensFile(String authTokensFile) {
             this.authTokensFile = authTokensFile;
+            return this;
+        }
+
+        public Builder callerCredentialsFile(String callerCredentialsFile) {
+            this.callerCredentialsFile = callerCredentialsFile;
             return this;
         }
 

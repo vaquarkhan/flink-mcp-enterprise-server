@@ -24,7 +24,8 @@ All settings are environment variables. `Config.fromEnv()` parses and `validate(
 | `MCP_FLINK_HTTP_HOST` | `127.0.0.1` | Bind address |
 | `MCP_FLINK_HTTP_PORT` | `8090` | HTTP port |
 | `MCP_FLINK_HTTP_BEARER_TOKEN` | — | Shared bearer **or** use tokens file |
-| `MCP_FLINK_AUTH_TOKENS_FILE` | — | Multi-caller hashed tokens (O2); sample [`../config/auth-tokens.sample`](../config/auth-tokens.sample) |
+| `MCP_FLINK_AUTH_TOKENS_FILE` | — | Multi-caller hashed tokens (O2A); sample [`../config/auth-tokens.sample`](../config/auth-tokens.sample) |
+| `MCP_FLINK_CALLER_CREDENTIALS_FILE` | — | Per-caller outbound Flink/Gateway auth (O2B); sample [`../config/caller-credentials.sample`](../config/caller-credentials.sample) |
 | `MCP_FLINK_HTTP_TLS_ENABLED` | `false` | HTTPS for MCP HTTP transport (O1) |
 | `MCP_FLINK_HTTP_TLS_KEYSTORE` | — | PKCS12/JKS path (required if TLS on) |
 | `MCP_FLINK_HTTP_TLS_KEYSTORE_PASSWORD` | — | Keystore password (required if TLS on) |
@@ -45,4 +46,9 @@ Policy sample: [`../config/policy.sample`](../config/policy.sample)
 Set `MCP_FLINK_HTTP_TLS_ENABLED=true` plus keystore path/password. Startup logs `https://…`. Self-signed PKCS12 is fine for local only; prefer a reverse proxy or CA cert in production.
 
 ### Multi-caller tokens (O2 phase A)
-`MCP_FLINK_AUTH_TOKENS_FILE` lines: `callerId : sha256(token) : jobsCsv : jarsCsv : readonly`. Governance audit and job/jar scope use the resolved caller. Phase B (per-caller outbound Flink credentials) is not implemented yet.
+`MCP_FLINK_AUTH_TOKENS_FILE` lines: `callerId : sha256(token) : jobsCsv : jarsCsv : readonly`. Governance audit and job/jar scope use the resolved caller.
+
+### Per-caller Flink credentials (O2 phase B)
+`MCP_FLINK_CALLER_CREDENTIALS_FILE` maps `callerId` → outbound `Authorization` for Flink REST and SQL Gateway (e.g. `Bearer …` / `Basic …`). Clients prefer the caller's credential over static `MCP_FLINK_REST_AUTH_HEADER` / `MCP_FLINK_GATEWAY_AUTH_HEADER`. Requires multi-token auth (tokens file). Backend pool threads inherit the caller context so outbound calls use the right header.
+
+This maps to whatever credential model your Flink cluster accepts today (shared Basic/Bearer per principal). Full Flink delegation-token exchange (FLIP-style) is cluster-specific and can plug into the same per-caller header slot later.

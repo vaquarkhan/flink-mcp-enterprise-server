@@ -118,7 +118,14 @@ public final class Governance {
                 return deny(caller, toolName, "BREAKER_OPEN", 6);
             }
 
-            Future<String> future = backendPool.submit(backendCall::get);
+            Future<String> future = backendPool.submit(() -> {
+                CallerContext.set(caller);
+                try {
+                    return backendCall.get();
+                } finally {
+                    CallerContext.clear();
+                }
+            });
             String body;
             try {
                 body = future.get(config.toolTimeoutMillis(), TimeUnit.MILLISECONDS);
