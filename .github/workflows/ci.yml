@@ -29,7 +29,7 @@ jobs:
         run: mvn -B clean package
       - name: Upload shaded jar
         if: matrix.java == '17'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: flink-mcp-server-all
           path: target/flink-mcp-server-*-all.jar
